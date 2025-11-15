@@ -39,7 +39,6 @@ reqwest = { version = "0.12.24", default-features = false, features = [
 surrealdb = { version = "2.3.10", features = [
   "kv-surrealkv",
   "kv-mem",
-  "kv-rocksdb",
   "protocol-http",
   "protocol-ws",
   "rustls",
