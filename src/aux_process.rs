@@ -2160,3 +2160,158 @@ pub async fn list_members(
 
   Ok(())
 }
+
+pub async fn get_grps_usr(
+  usr: String,
+  p: &Pets,
+) -> AppResult<Vec<Vec<String>>> {
+  let ep = Ep::Groups;
+
+  let qry = json!({
+    "userKey": usr
+  });
+
+  let au_build =
+    req_build("GET", ep.base_url(), Some(&p.tsy.clone()), Some(&qry), None)
+      .cwl("Could not create request builder in get_grps_usr")?;
+
+  // Use global Groups listing limiter to prevent rate multiplication in concurrent operations
+  crate::limiters::get_global_groups_list_limiter()
+    .until_ready()
+    .await;
+
+  let res = au_build
+    .send()
+    .await
+    .cwl("Failed to send request in get_grps_usr")?;
+
+  match res.status().as_u16() {
+    200..=299 => {
+      let rfin: Value =
+        res.json().await.cwl("Failed to parse JSON response")?;
+
+      let empty_vec = Vec::new();
+
+      let grps = rfin
+        .get("groups")
+        .and_then(|c| c.as_array())
+        .unwrap_or(&empty_vec);
+
+      let mut groups_list = Vec::new();
+
+      for group in grps.iter() {
+        let gid = group
+          .get("id")
+          .and_then(|id| id.as_str())
+          .map(|s| s.to_string());
+
+        let gemail = group
+          .get("email")
+          .and_then(|room| room.as_str())
+          .map(|s| s.to_string());
+
+        if let (Some(group_id), Some(group_email)) = (gid, gemail) {
+          groups_list.push(vec![group_id, group_email]);
+        }
+      }
+      Ok(groups_list)
+    }
+    status => {
+      let error_text = res
+        .text()
+        .await
+        .cwl("Failed to read error response body in get_grps_usr")?;
+
+      let clean_error_details = parse_google_api_error(&error_text);
+      bail!(
+        "Course retrieval failed - Status: {} {} - {}",
+        status,
+        get_status_code_name(status),
+        clean_error_details
+      )
+    }
+  }
+}
+
+pub async fn get_membs_grp(
+  grp: String,
+  limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
+  p: &Pets,
+) -> AppResult<Vec<Vec<String>>> {
+  let mut membs: Vec<Vec<String>> = Vec::new();
+  let ep = Ep::Groups;
+
+  // let url = format!("{}{}", ep.base_url(), usr);
+
+  // NOTE will not get provisioned classes, you MUST update all classes to active to get all the classes first
+  // "courseStates":"ACTIVE" (use this query only in the future for getting grades from one student)
+
+  let grp = if grp.contains("@") {
+    grp
+  } else {
+    format!("{}@{}", grp.trim(), p.dom)
+  };
+
+  let url = format!("{}{grp}/members", ep.base_url());
+
+  debug!("This is url in get_membs_grp {:#?}", url);
+
+  let au_build = req_build("GET", &url, Some(&p.tsy.clone()), None, None)
+    .cwl("Could not create request builder in get_membs_grp")?;
+
+  limiter.until_ready().await;
+
+  let res = au_build
+    .send()
+    .await
+    .cwl("Failed to send request in get_membs_grp")?;
+
+  match res.status().as_u16() {
+    200..=299 => {
+      let rfin: Value =
+        res.json().await.cwl("Failed to parse JSON response")?;
+
+      debug!("This is rfin in get_membs_grp {:#?}", rfin);
+
+      let empty_vec = Vec::new();
+
+      let mems = rfin
+        .get("members")
+        .and_then(|c| c.as_array())
+        .unwrap_or(&empty_vec);
+
+      for member in mems.iter() {
+        let eml = member
+          .get("email")
+          .and_then(|id| id.as_str())
+          .map(|s| s.to_string());
+
+        let rol = member
+          .get("role")
+          .and_then(|rol| rol.as_str())
+          .map(|s| s.to_string());
+
+        if let (Some(eml), Some(rol)) = (eml, rol) {
+          membs.push(vec![eml, rol]);
+        }
+      }
+
+      debug!("This is membs in get_membs_grp {:#?}", membs);
+      Ok(membs)
+    }
+    status => {
+      let error_text = res
+        .text()
+        .await
+        .cwl("Failed to read error response body in get_membs_grp")?;
+
+      bail!(format_google_api_error(
+        "Group members retrieval",
+        "admin",
+        status,
+        &error_text,
+        Some(&format!("group {}", grp))
+      ))
+    }
+  }
+}
