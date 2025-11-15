@@ -19,7 +19,6 @@ use dotenv::dotenv;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use reqwest::{Client, Method, RequestBuilder};
 
-use crate::chats::chreserrs;
 use crate::sheets::count_db;
 use crate::tracer::ContextExt;
 use crate::{bail, debug, error, info, warn};

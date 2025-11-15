@@ -1,9 +1,7 @@
 pub use super::apis::*;
-pub use super::aux_emls::*;
 pub use super::lists::*;
 pub use super::mod_process::*;
 use crate::AppResult;
-use crate::get_template_id_index;
 use crate::surrealstart::{Pets, SP, TSHID, is_list_command};
 use crate::tracer::ContextExt;
 use crate::{bail, debug, error, info, warn};
