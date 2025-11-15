@@ -1,5 +1,4 @@
 use super::apis::lcs;
-pub use super::chats::*;
 use crate::AppResult;
 use crate::limiters::get_global_sheets_limiter;
 use crate::tracer::ContextExt;
@@ -136,7 +135,10 @@ pub async fn frshts<T: Into<Ep>>(
           "Google Sheets API returned 403 status: Body: {}",
           error_text
         );
-        bail!("Google Sheets API error (HTTP 403 Forbidden): {}. This may be due to authentication issues like 2-step verification or insufficient permissions.", error_text)
+        bail!(
+          "Google Sheets API error (HTTP 403 Forbidden): {}. This may be due to authentication issues like 2-step verification or insufficient permissions.",
+          error_text
+        )
       }
     }
     status => {
@@ -1305,7 +1307,10 @@ pub async fn delete_sheet(
           "Google Sheets API returned 400 status: {} - Body: {}",
           400, error_text
         );
-        bail!("Google Sheets API error (HTTP 400 Bad Request): {}", error_text)
+        bail!(
+          "Google Sheets API error (HTTP 400 Bad Request): {}",
+          error_text
+        )
       }
     }
     200 => {
