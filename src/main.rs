@@ -23,7 +23,8 @@ use axum::{
 use serde_json::json;
 
 use surrealstart::{
-  StaticSp, StaticTshid, create_essential_indexes, is_list_command,
+  EM, StaticAbr, StaticEm, StaticFil, StaticKey, StaticPid, StaticSdir,
+  StaticSp, StaticTshid, create_essential_indexes, initdb, is_list_command,
   is_valid_command,
 };
 

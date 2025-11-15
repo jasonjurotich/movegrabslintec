@@ -1,8 +1,9 @@
-// pub use super::apis::*;
+pub use super::apis::*;
 pub use super::sheets::*;
 use crate::AppResult;
 use crate::aux_sur::{check_user_in_admin_list, get_abr_from_email_domain};
-use crate::surrealstart::{SP, get_all_commands};
+use crate::goauth::get_tok;
+use crate::surrealstart::{ABR, DB, EM, PETS, SID, SP, TSHID, get_all_commands, req_build};
 use crate::tracer::ContextExt;
 use crate::{bail, debug, info, warn};
 

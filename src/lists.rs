@@ -1,7 +1,7 @@
 pub use super::aux_sur::*;
 pub use super::sheets::*;
 use crate::AppResult;
-use crate::mods::get_perm_driveid;
+use crate::aux_process::get_perm_driveid;
 use crate::surrealstart::Pets;
 use crate::tracer::ContextExt;
 use crate::{bail, debug, error};
