@@ -1,9 +1,11 @@
+#![allow(dead_code)]
+
 use super::apis::*;
 use crate::AppResult;
 use crate::goauth::get_token_for_secrets;
 use crate::limiters::get_global_sheets_limiter;
 use crate::surrealstart::{
-  getnumqry, google_to_sheetsdb, req_build, DB, EM, PETS,
+  DB, EM, PETS, getnumqry, google_to_sheetsdb, req_build,
 };
 use crate::tracer::ContextExt;
 use crate::{bail, debug, error, info, warn};
