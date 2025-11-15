@@ -1,5 +1,5 @@
 mod apis;
-mod aux_mods;
+// mod aux_mods;
 mod aux_process;
 
 mod error_utils;
@@ -19,13 +19,46 @@ use tracer::*;
 
 pub type AppResult<T, E = anyhow::Error> = std::result::Result<T, E>;
 
+fn format_error_chain(error: &anyhow::Error) -> String {
+  let mut chain = Vec::new();
+  chain.push(error.to_string());
+
+  let mut source = error.source();
+  while let Some(err) = source {
+    chain.push(err.to_string());
+    source = err.source();
+  }
+
+  chain.join("\n↳ ")
+}
+
+struct AppError(anyhow::Error);
+
+// Implement conversion from anyhow::Error to our AppError
+impl From<anyhow::Error> for AppError {
+  fn from(err: anyhow::Error) -> Self {
+    AppError(err)
+  }
+}
+
+// Implement IntoResponse for our wrapper type
+impl IntoResponse for AppError {
+  fn into_response(self) -> axum::response::Response {
+    (
+      StatusCode::INTERNAL_SERVER_ERROR,
+      format!("Something went wrong: {}", self.0),
+    )
+      .into_response()
+  }
+}
+
 fn perform_health_check() -> bool {
   println!("Performing health check... status: OK.");
   true
 }
 
 async fn run_app() -> AppResult<()> {
-  println!("=== AVISOSBOT2 STARTING ===");
+  println!("=== MOVEVIDS STARTING ===");
   let _log_guard = init_logging();
   println!("=== LOGGING INITIALIZED ===");
 
@@ -41,27 +74,20 @@ async fn run_app() -> AppResult<()> {
   StaticSdir::set(&secrets_dir);
 
   initdb().await?;
-  chres().await?;
 
-  if let Some(last_error) = tracer::get_last_error() {
-    chreserrs(last_error)
-      .await
-      .cwl("Could not send error messages.")?
-  }
+  movevideosmul().await.cwl("Could not run  movevideosmul")?;
 
   Ok(())
 }
 
 #[tokio::main]
 async fn main() {
-  use std::io::{self, Write};
-
-  println!("=== BINARY STARTING ===");
-  eprintln!("=== BINARY STARTING (stderr) ===");
+  println!("=== MOVEVIDS STARTING ===");
   io::stdout().flush().unwrap();
   io::stderr().flush().unwrap();
 
   setup_panic_hook();
+
   let args: Vec<String> = env::args().collect();
   if args.len() > 1 && args[1] == "--health-check" {
     if perform_health_check() {
@@ -71,11 +97,6 @@ async fn main() {
     }
   }
 
-  println!("=== ABOUT TO RUN APP ===");
-  eprintln!("=== ABOUT TO RUN APP (stderr) ===");
-  io::stdout().flush().unwrap();
-  io::stderr().flush().unwrap();
-
   if let Err(e) = run_app().await {
     println!("\n--- APPLICATION FAILED ---\nError: {e}");
     eprintln!("\n--- APPLICATION FAILED ---\nError: {e}");
@@ -83,8 +104,17 @@ async fn main() {
     io::stderr().flush().unwrap();
     std::process::exit(1);
   }
-  println!("=== APP COMPLETED SUCCESSFULLY ===");
-  eprintln!("=== APP COMPLETED SUCCESSFULLY (stderr) ===");
+
+  println!("=== MOVEVIDS COMPLETED SUCCESSFULLY ===");
   io::stdout().flush().unwrap();
   io::stderr().flush().unwrap();
+}
+
+async fn movevideosmul() -> AppResult<()> {
+  let grabfol1 = "grabacionesmeet";
+  let grabfol2 = "GRABACIONES RESPALDO";
+
+  debug!("This is folders {:#?}", grabfol1);
+
+  Ok(())
 }
