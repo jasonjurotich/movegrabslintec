@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub use super::apis::*;
 pub use super::surrealstart::*;
 use crate::AppResult;
