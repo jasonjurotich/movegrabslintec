@@ -5,8 +5,7 @@ use crate::AppResult;
 use crate::jsonresfil::get_template_id_index;
 use crate::limiters::*;
 use crate::surrealstart::{
-  getnumqry, Pets, SP, TSHID, is_list_command,
-  DB, PETS,
+  DB, PETS, Pets, SP, TSHID, getnumqry, is_list_command,
 };
 use crate::tracer::ContextExt;
 use crate::{bail, debug, error, info, warn};
@@ -91,106 +90,30 @@ pub async fn runmods(
         "lo" => list_orgs(limiter, p).await.cwl("Failed to list orgs")?,
         "lg" => list_groups(limiter, p).await.cwl("Failed to list groups")?,
         "lu" => list_users(limiter, p).await.cwl("Failed to list users")?,
-        "lud" => list_users(limiter, p).await.cwl("Failed to list users")?,
-        "lc" => list_courses(limiter, p)
-          .await
-          .cwl("Failed to list courses")?,
-
         "ldr" => list_drives(limiter, p).await.cwl("Failed to list drives")?,
-        "lsp" => list_spaces(limiter, p).await.cwl("Failed to list spaces")?,
-
-        "lca" => list_calendars(record.clone(), limiter, p)
-          .await
-          .cwl("Failed to list calendars")?,
-        "le" => list_events(record.clone(), limiter, p)
-          .await
-          .cwl("Failed to list events")?,
-
-        "lcb" => list_chromebooks(limiter, p)
-          .await
-          .cwl("Failed to list chromebooks")?,
-        "ltu" => list_guardians(limiter, p)
-          .await
-          .cwl("Failed to list guardians")?,
-        "li" => list_lics(record.clone(), limiter, p)
-          .await
-          .cwl("Failed to list licenses")?,
-
         "lm" => list_members(record.clone(), limiter, p)
           .await
           .cwl("Failed to list members")?,
-
         "lv" => list_files(record.clone(), limiter, p)
           .await
           .cwl("Failed to list meet recordings")?,
-
         "ldu" => {
           list_files(record.clone(), limiter, p)
             .await
             .cwl("Failed to list files for user")?;
         }
-
         "ldd" => {
           list_files(record.clone(), limiter, p)
             .await
             .cwl("Failed to list files for drive")?;
         }
-
         "lma" => list_members(record.clone(), limiter, p)
           .await
           .cwl("Failed to list all members")?,
 
-        "lt" => list_top_prof_stu_work(record.clone(), limiter, p)
-          .await
-          .cwl("Failed to list topics")?,
-        "lta" => list_top_prof_stu_work(record.clone(), limiter, p)
-          .await
-          .cwl("Failed to list all topics")?,
-
-        "lp" => list_top_prof_stu_work(record.clone(), limiter, p)
-          .await
-          .cwl("Failed to list teachers")?,
-        "lpa" => list_top_prof_stu_work(record.clone(), limiter, p)
-          .await
-          .cwl("Failed to list all teachers")?,
-
-        "ls" => list_top_prof_stu_work(record.clone(), limiter, p)
-          .await
-          .cwl("Failed to list students")?,
-        "lsa" => list_top_prof_stu_work(record.clone(), limiter, p)
-          .await
-          .cwl("Failed to list all students")?,
-
-        "la" => list_top_prof_stu_work(record.clone(), limiter, p)
-          .await
-          .cwl("Failed to list course work")?,
-
-        "lgr" => list_grades(record.clone(), limiter, p)
-          .await
-          .cwl("Failed to list grades")?,
-
-        "lgra" => list_grades(record.clone(), limiter, p)
-          .await
-          .cwl("Failed to list all grades")?,
-
-        "lgrav" => lgradav().await.cwl("Failed to list all grades")?,
-
-        "lgrap" => lgradpon()
-          .await
-          .cwl("Failed to list grades from categories")?,
-
-        "lre" => list_reports(limiter, p)
-          .await
-          .cwl("Failed to list reports")?,
-
-        "lreu" => list_reports_user(record.clone(), limiter, p)
-          .await
-          .cwl("Failed to list reports")?,
-
         // "cadsh" => change_one_sheet_in_all(record.clone())
         //   .await
         //   .cwl("Failed to copy admin sheet to other spreadsheets")?,
-
         cmd if crate::surrealstart::get_other_commands().contains(&cmd) => {
           if let Err(e) = process_command(
             record.clone(),

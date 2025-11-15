@@ -102,10 +102,13 @@ pub async fn get_org_from_orgbase(
   }
 }
 
-pub async fn get_all_org_group_mappings(abr: String) -> AppResult<HashMap<String, String>> {
+pub async fn get_all_org_group_mappings(
+  abr: String,
+) -> AppResult<HashMap<String, String>> {
   let ep = Ep::Orgbase;
 
-  let qry = "select data.org, data.grupo from type::table($table) where abr = $abr;";
+  let qry =
+    "select data.org, data.grupo from type::table($table) where abr = $abr;";
 
   let mut response = DB
     .query(qry)
@@ -121,8 +124,14 @@ pub async fn get_all_org_group_mappings(abr: String) -> AppResult<HashMap<String
   let mut map = HashMap::new();
   for record in records {
     if let (Some(org), Some(grupo)) = (
-      record.get("data").and_then(|d| d.get("org")).and_then(|o| o.as_str()),
-      record.get("data").and_then(|d| d.get("grupo")).and_then(|g| g.as_str()),
+      record
+        .get("data")
+        .and_then(|d| d.get("org"))
+        .and_then(|o| o.as_str()),
+      record
+        .get("data")
+        .and_then(|d| d.get("grupo"))
+        .and_then(|g| g.as_str()),
     ) {
       map.insert(org.to_string(), grupo.to_string());
     }
@@ -147,16 +156,27 @@ pub async fn get_grp_from_orgbase(
     let cache = ORG_GROUP_CACHE.lock().await;
     if let Some(mappings) = cache.get(&abr) {
       if let Some(grupo) = mappings.get(&org) {
-        debug!("get_grp_from_orgbase cache hit for abr={}, org={}: {}", abr, org, grupo);
+        debug!(
+          "get_grp_from_orgbase cache hit for abr={}, org={}: {}",
+          abr, org, grupo
+        );
         return Ok(grupo.clone());
       } else {
-        debug!("get_grp_from_orgbase cache hit for abr={} but org '{}' not found in {} mappings", abr, org, mappings.len());
+        debug!(
+          "get_grp_from_orgbase cache hit for abr={} but org '{}' not found in {} mappings",
+          abr,
+          org,
+          mappings.len()
+        );
         return Ok(String::new());
       }
     }
   }
 
-  debug!("get_grp_from_orgbase cache miss for abr={}, org={}, falling back to database", abr, org);
+  debug!(
+    "get_grp_from_orgbase cache miss for abr={}, org={}, falling back to database",
+    abr, org
+  );
 
   let ep = Ep::Orgbase;
 
@@ -174,7 +194,10 @@ pub async fn get_grp_from_orgbase(
     .bind(("org", org.clone()));
 
   let result = query.await;
-  debug!("get_grp_from_orgbase raw result for org '{}': {:?}", org, result);
+  debug!(
+    "get_grp_from_orgbase raw result for org '{}': {:?}",
+    org, result
+  );
 
   let orgstr: String = result
     .map(|mut res| {
@@ -625,43 +648,6 @@ pub async fn get_unique_stus_from_gradsav(
 
   debug!("Found {} unique students", students.len());
   Ok(students)
-}
-
-pub async fn get_tutors_usr(usr: String, abr: String) -> AppResult<String> {
-  let ep = Ep::Guardians;
-
-  debug!("Getting tutors for student: {} in abr: {}", usr, abr);
-
-  let qry = "
-    select data.correo_tutor from type::table($table)
-    where abr = $abr
-      and data.correo_alumno = $correo_alumno
-      and data.correo_tutor != null
-      and data.correo_tutor != ''";
-
-  let results: Vec<Value> = DB
-    .query(qry)
-    .bind(("table", ep.table_sheet()))
-    .bind(("abr", abr))
-    .bind(("correo_alumno", usr))
-    .await
-    .cwl("Failed to execute tutors query")?
-    .take(0)
-    .cwl("Failed to take results from tutors query")?;
-
-  let mut emails = Vec::new();
-  for result in results {
-    if let Some(obj) = result.as_object()
-      && let Some(data) = obj.get("data").and_then(|d| d.as_object())
-      && let Some(email) = data.get("correo_tutor").and_then(|v| v.as_str())
-    {
-      emails.push(email.to_string());
-    }
-  }
-
-  let tutors_string = emails.join(",");
-  debug!("Found tutors: {}", tutors_string);
-  Ok(tutors_string)
 }
 
 pub async fn get_name_usr(usr: String, abr: String) -> AppResult<String> {

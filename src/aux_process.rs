@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub use super::aux_sur::*;
 pub use super::limiters::*;
 pub use super::surrealstart::*;
@@ -11,10 +13,7 @@ use crate::error_utils::{
 use crate::extract_record_parts;
 use crate::limiters::get_global_drive_limiter;
 use crate::lists::lists;
-use crate::surrealstart::{
-  update_db_good, DB,
-  Pets, req_build,
-};
+use crate::surrealstart::{DB, Pets, req_build, update_db_good};
 use crate::tracer::ContextExt;
 use crate::{bail, debug};
 // use base64::{Engine, engine::general_purpose::STANDARD};
@@ -2012,36 +2011,36 @@ pub async fn upload_pdf_drive(
 //         .unwrap_or(0);
 //       a_id.cmp(&b_id)
 //     });
-// 
+//
 //     // Process rows synchronously (one by one) to respect dependencies
 //     for record in sorted_rows {
 //       let (id, data) = extract_record_parts(record.clone())?;
 //       let mut er1 = String::new();
-// 
+//
 //       let name = check_key(&data, "nombre", &mut er1)
 //         .and_then(|v| v.as_str())
 //         .unwrap_or("");
-// 
+//
 //       let parent_path = check_key(&data, "org_principal", &mut er1)
 //         .and_then(|v| v.as_str())
 //         .unwrap_or("/");
-// 
+//
 //       validate_required_fields!(data, er1, "create_ors_orgbase", id);
-// 
+//
 //       // if name.is_empty() {
 //       //   let error_msg = format!("Skipping record {} - empty name", id);
 //       //   error!(error = %error_msg, "Record validation failed");
 //       //   errs1.push(error_msg);
 //       //   continue;
 //       // }
-// 
+//
 //       let body = json!({
 //         "name": name,
 //         "description": name,
 //         "parentOrgUnitPath": parent_path,
 //         "blockInheritance": false,
 //       });
-// 
+//
 //       let au_build = req_build(
 //         "POST",
 //         ep.base_url(),
@@ -2050,14 +2049,14 @@ pub async fn upload_pdf_drive(
 //         Some(&body),
 //       )
 //       .cwl("Could not create request builder in create_orgs_orgbase")?;
-// 
+//
 //       org_limiter.until_ready().await;
-// 
+//
 //       let res = au_build
 //         .send()
 //         .await
 //         .cwl("Failed to send request in create_orgs_orgbase")?;
-// 
+//
 //       match res.status().as_u16() {
 //         200..=299 => {
 //           debug!("Successfully created org: {}", name);
@@ -2065,7 +2064,7 @@ pub async fn upload_pdf_drive(
 //             .json()
 //             .await
 //             .cwl("Failed to parse JSON response from Orgs API")?;
-// 
+//
 //           update_rows_good(id, rfin, p, None).await.cwl(
 //             "Failed to update database with successful create_orgs_orgbase result",
 //           )?;
@@ -2087,9 +2086,9 @@ pub async fn upload_pdf_drive(
 //             .text()
 //             .await
 //             .cwl("Failed to read error response body in create_orgs_orgbase")?;
-// 
+//
 //           let clean_error_details = parse_google_api_error(&error_text);
-// 
+//
 //           let error_msg = format!(
 //             "create_orgs_orgbase failed for org {} - Status: {} {} - {}",
 //             name,
@@ -2097,10 +2096,10 @@ pub async fn upload_pdf_drive(
 //             get_status_code_name(status),
 //             clean_error_details
 //           );
-// 
+//
 //           error!(error = %error_msg, "Organization creation failed");
 //           errs1.push(error_msg.clone());
-// 
+//
 //           update_db_bad(error_msg.clone(), id)
 //             .await
 //             .cwl("Failed to update database with create_orgs_orgbase error")?;
@@ -2108,7 +2107,7 @@ pub async fn upload_pdf_drive(
 //       }
 //     }
 //   }
-// 
+//
 //   Ok(())
 // }
 
