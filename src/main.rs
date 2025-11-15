@@ -14,8 +14,19 @@ mod sheets;
 mod surrealstart;
 mod tracer;
 
+use goauth::*;
 use std::env;
 use tracer::*;
+
+use axum::{
+  Json, Router, http::StatusCode, response::IntoResponse, routing::post,
+};
+use serde_json::json;
+
+use surrealstart::{
+  StaticSp, StaticTshid, create_essential_indexes, is_list_command,
+  is_valid_command,
+};
 
 pub type AppResult<T, E = anyhow::Error> = std::result::Result<T, E>;
 
