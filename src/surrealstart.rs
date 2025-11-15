@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // -------------------REQUIREMENTS--------------------------
 // to run sql, you must have started the server beforehand, the code works without starting it
 //
@@ -15,8 +17,8 @@
 // NOTE you CANNOT use embedding mode if the dabase goes over 1GB of space, it tries to put it all in memory and takes almost a minute! use ony for when it does not go over 300 mb
 
 // use crate::apis::check_key;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use dotenv::dotenv;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use reqwest::{Client, Method, RequestBuilder};
