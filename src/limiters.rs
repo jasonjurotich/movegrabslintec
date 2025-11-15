@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::{debug, info};
 use governor::clock::DefaultClock;
 use governor::state::InMemoryState;
