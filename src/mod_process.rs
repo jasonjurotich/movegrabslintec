@@ -7,17 +7,15 @@ use crate::error_utils::{get_status_code_name, parse_google_api_error};
 use crate::extract_record_parts;
 use crate::goauth::get_tok;
 use crate::limiters::{
-  create_rate_limiter, get_global_delete_limiter, get_global_drive_limiter,
+  get_global_delete_limiter, get_global_drive_limiter,
   get_global_email_delete_limiter, get_global_licensing_limiter,
 };
 use crate::surrealstart::{
-  DB, PETS, Pets, del_row_good, get_lic_info, req_build, update_db_bad,
-  update_db_good,
+  DB, Pets, del_row_good, get_lic_info, req_build, update_db_bad,
 };
 use crate::tracer::ContextExt;
 use crate::validate_required_fields;
 use crate::{bail, debug, warn};
-use chrono::{Datelike, Duration, Local, NaiveDate, Timelike};
 use governor::RateLimiter;
 use governor::clock::DefaultClock;
 use governor::state::InMemoryState;

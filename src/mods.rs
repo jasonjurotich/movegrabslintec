@@ -2,14 +2,11 @@ pub use super::apis::*;
 pub use super::lists::*;
 pub use super::mod_process::*;
 use crate::AppResult;
-use crate::aux_sur::*;
-use crate::goauth::get_tok;
 use crate::jsonresfil::get_template_id_index;
 use crate::limiters::*;
-use crate::sheets::*;
 use crate::surrealstart::{
-  getnumqry, google_to_sheetsdb, req_build, Pets, SP, TSHID, is_list_command,
-  DB, EM, PETS,
+  getnumqry, Pets, SP, TSHID, is_list_command,
+  DB, PETS,
 };
 use crate::tracer::ContextExt;
 use crate::{bail, debug, error, info, warn};

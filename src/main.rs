@@ -17,21 +17,15 @@ mod tracer;
 use goauth::*;
 use tracer::*;
 
-use axum::{
-  Json, Router, http::StatusCode, response::IntoResponse, routing::post,
-};
-use serde_json::json;
+use axum::{http::StatusCode, response::IntoResponse};
 
 use surrealstart::{
-  EM, StaticAbr, StaticEm, StaticFil, StaticKey, StaticPid, StaticSdir,
-  StaticSp, StaticTshid, create_essential_indexes, initdb, is_list_command,
-  is_valid_command,
+  EM, StaticEm, StaticFil, StaticKey, StaticPid, StaticSdir, initdb,
 };
 
 use std::{
   env,
   io::{self, Write},
-  net::SocketAddr,
 };
 
 pub type AppResult<T, E = anyhow::Error> = std::result::Result<T, E>;
