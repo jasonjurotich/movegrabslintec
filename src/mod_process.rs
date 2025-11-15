@@ -1,12 +1,18 @@
 use crate::AppResult;
 use crate::apis::Ep;
-use crate::aux_sur::check_is_admin;
+use crate::aux_process::*;
+use crate::aux_sur::{check_is_admin, get_grps_usr, get_org_from_orgbase};
 use crate::check_key;
 use crate::error_utils::{get_status_code_name, parse_google_api_error};
 use crate::extract_record_parts;
+use crate::goauth::get_tok;
 use crate::limiters::{
   create_rate_limiter, get_global_delete_limiter, get_global_drive_limiter,
   get_global_email_delete_limiter, get_global_licensing_limiter,
+};
+use crate::surrealstart::{
+  del_row_good, get_lic_info, update_db_bad, update_db_good, DB, Pets,
+  req_build, PETS,
 };
 use crate::tracer::ContextExt;
 use crate::validate_required_fields;
@@ -1479,19 +1485,20 @@ pub async fn process_command(
 
       // let del_limiter = create_rate_limiter(Ep::Courses.modvlow()); // For deletions
 
-      let cors = get_courses_stu(usr.to_owned(), limiter.clone(), p)
-        .await
-        .cwl("Could not get courses for student")?;
-
-      debug!("This is cors in csc {:#?}", cors);
-
-      del_courses_stu(usr.to_owned(), cors, p)
-        .await
-        .cwl("Could not remove student from courses")?;
-
-      add_courses_stu(usr.to_owned(), grp.to_owned(), p)
-        .await
-        .cwl("Could not add student to courses")?;
+      // COMMENTED OUT - COURSES NOT NEEDED FOR THIS PROJECT
+      // let cors = get_courses_stu(usr.to_owned(), limiter.clone(), p)
+      //   .await
+      //   .cwl("Could not get courses for student")?;
+      //
+      // debug!("This is cors in csc {:#?}", cors);
+      //
+      // del_courses_stu(usr.to_owned(), cors, p)
+      //   .await
+      //   .cwl("Could not remove student from courses")?;
+      //
+      // add_courses_stu(usr.to_owned(), grp.to_owned(), p)
+      //   .await
+      //   .cwl("Could not add student to courses")?;
 
       update_db_good(id)
         .await
@@ -1508,9 +1515,10 @@ pub async fn process_command(
 
       validate_required_fields!(data, er1, "add_courses_usr", id);
 
-      add_courses_stu(usr.to_owned(), grp.to_owned(), p)
-        .await
-        .cwl("Could not add student to courses")?;
+      // COMMENTED OUT - COURSES NOT NEEDED FOR THIS PROJECT
+      // add_courses_stu(usr.to_owned(), grp.to_owned(), p)
+      //   .await
+      //   .cwl("Could not add student to courses")?;
 
       update_db_good(id)
         .await
@@ -1525,15 +1533,16 @@ pub async fn process_command(
 
       // let del_limiter = create_rate_limiter(Ep::Courses.modvlow()); // For deletions
 
-      let cors = get_courses_stu(usr.to_owned(), limiter.clone(), p)
-        .await
-        .cwl("Could not get courses for student")?;
-
-      debug!("This is cors in csc {:#?}", cors);
-
-      del_courses_stu(usr.to_owned(), cors, p)
-        .await
-        .cwl("Could not remove student from courses")?;
+      // COMMENTED OUT - COURSES NOT NEEDED FOR THIS PROJECT
+      // let cors = get_courses_stu(usr.to_owned(), limiter.clone(), p)
+      //   .await
+      //   .cwl("Could not get courses for student")?;
+      //
+      // debug!("This is cors in csc {:#?}", cors);
+      //
+      // del_courses_stu(usr.to_owned(), cors, p)
+      //   .await
+      //   .cwl("Could not remove student from courses")?;
 
       update_db_good(id)
         .await
@@ -1754,22 +1763,23 @@ pub async fn process_command(
           .cwl("Could not add user to group")?;
       }
 
-      if ["cogc", "cogalc"].contains(&cmd) {
-        // Use appropriate Courses API rate limiter for listing courses
-        // This command is Users endpoint but needs to call Courses API for sub-operations
-        let list_limiter = create_rate_limiter(Ep::Courses.modlst()); // 40 ops/sec for Courses listing
-        let cors = get_courses_stu(usr.to_owned(), list_limiter.clone(), p)
-          .await
-          .cwl("Could not get courses for student")?;
-
-        del_courses_stu(usr.to_owned(), cors, p)
-          .await
-          .cwl("Could not remove student from courses")?;
-
-        add_courses_stu(usr.to_owned(), ngrp.to_owned(), p)
-          .await
-          .cwl("Could not add student to courses")?;
-      }
+      // COMMENTED OUT - COURSES NOT NEEDED FOR THIS PROJECT
+      // if ["cogc", "cogalc"].contains(&cmd) {
+      //   // Use appropriate Courses API rate limiter for listing courses
+      //   // This command is Users endpoint but needs to call Courses API for sub-operations
+      //   let list_limiter = create_rate_limiter(Ep::Courses.modlst()); // 40 ops/sec for Courses listing
+      //   let cors = get_courses_stu(usr.to_owned(), list_limiter.clone(), p)
+      //     .await
+      //     .cwl("Could not get courses for student")?;
+      //
+      //   del_courses_stu(usr.to_owned(), cors, p)
+      //     .await
+      //     .cwl("Could not remove student from courses")?;
+      //
+      //   add_courses_stu(usr.to_owned(), ngrp.to_owned(), p)
+      //     .await
+      //     .cwl("Could not add student to courses")?;
+      // }
 
       let path = get_org_from_orgbase(p.abr.clone(), ngrp.to_owned())
         .await
@@ -2302,9 +2312,10 @@ pub async fn process_command(
 
       validate_required_fields!(data, er1, "change_owner", id);
 
-      add_teacher_cor(cordos.to_owned(), gen_id.to_owned(), limiter.clone(), p)
-        .await
-        .cwl("Could not get file downloaded")?;
+      // COMMENTED OUT - COURSES NOT NEEDED FOR THIS PROJECT
+      // add_teacher_cor(cordos.to_owned(), gen_id.to_owned(), limiter.clone(), p)
+      //   .await
+      //   .cwl("Could not get file downloaded")?;
 
       let body = json!({
         "ownerId": cordos,
@@ -2347,23 +2358,24 @@ pub async fn process_command(
       debug!("This is grp in racl {:#?}", grp);
       validate_required_fields!(data, er1, "add_rem_studs_cour", id);
 
-      let stus = get_stus_course(gen_id.to_owned(), limiter.clone(), p)
-        .await
-        .cwl("Could not get courses for student")?;
-
-      debug!("This is stus in csc {:#?}", stus);
-
-      del_stus_course(gen_id.to_owned(), stus, p)
-        .await
-        .cwl("Could not remove student from courses")?;
-
-      let membs = get_membs_grp(grp.to_owned(), limiter.clone(), p)
-        .await
-        .cwl("Could not get members from group")?;
-
-      add_stus_course(gen_id.to_owned(), membs, p)
-        .await
-        .cwl(&format!("Could not add students to course {}", gen_id))?;
+      // COMMENTED OUT - COURSES NOT NEEDED FOR THIS PROJECT
+      // let stus = get_stus_course(gen_id.to_owned(), limiter.clone(), p)
+      //   .await
+      //   .cwl("Could not get courses for student")?;
+      //
+      // debug!("This is stus in csc {:#?}", stus);
+      //
+      // del_stus_course(gen_id.to_owned(), stus, p)
+      //   .await
+      //   .cwl("Could not remove student from courses")?;
+      //
+      // let membs = get_membs_grp(grp.to_owned(), limiter.clone(), p)
+      //   .await
+      //   .cwl("Could not get members from group")?;
+      //
+      // add_stus_course(gen_id.to_owned(), membs, p)
+      //   .await
+      //   .cwl(&format!("Could not add students to course {}", gen_id))?;
 
       update_db_good(id)
         .await

@@ -1,5 +1,6 @@
 pub use super::aux_sur::*;
 pub use super::limiters::*;
+pub use super::mod_process::*;
 pub use super::sheets::*;
 pub use super::surrealstart::*;
 use crate::validate_required_fields;
@@ -12,7 +13,14 @@ use crate::error_utils::{
 };
 use crate::extract_record_parts;
 use crate::goauth::get_tok;
+use crate::limiters::{
+  create_rate_limiter, get_global_classroom_limiter, get_global_drive_limiter,
+};
 use crate::lists::lists;
+use crate::surrealstart::{
+  del_row_good, getbytes, get_lic_info, update_db_bad, update_db_good, DB,
+  Pets, req_build, PETS, TSHID,
+};
 use crate::tracer::ContextExt;
 use crate::{bail, debug, error, warn};
 // use base64::{Engine, engine::general_purpose::STANDARD};
@@ -263,187 +271,188 @@ fn ex_arr_file_urls(rfin: &Value, path: &[&str]) -> Value {
   }
 }
 
-pub async fn change_one_sheet_in_all(record: Value) -> AppResult<()> {
-  let ep = Ep::Sheets;
-  let template_sheet_id = &*TSHID;
-
-  let tsyusr = get_tok(
-    "adminbot@adminbot-iedu-prod.iam.gserviceaccount.com".to_owned(),
-    "yes",
-  )
-  .await
-  .cwl("Failed to generate token for change_one_sheet_in_all")?;
-
-  let (id, data) = extract_record_parts(record.clone())?;
-  let mut er1 = String::new();
-
-  let destspshid = check_key(&data, "spreadsheet_id", &mut er1)
-    .and_then(|v| v.as_str())
-    .unwrap_or("")
-    .to_string();
-
-  let p = PETS
-    .get()
-    .await
-    .cwl("Could not get pet fields for list_lics")?;
-
-  let args: Vec<&str> = p.params.split(", ").collect();
-  let titl = args[0].trim(); // sheet to replace
-
-  let ept = match Ep::strtoenum(titl, false) {
-    Some(ep) => ep,
-    None => bail!(
-      "Invalid sheet title '{}' - no matching endpoint found",
-      titl
-    ),
-  };
-
-  let (tempshid, tempindex) = get_sheet_id_index(
-    tsyusr.clone(),
-    ept.clone(),
-    template_sheet_id.to_string(),
-  )
-  .await
-  .cwl("Failed to get sheet ID from template spreadsheet")?
-  .ok_or_else(|| {
-    anyhow::anyhow!("Sheet '{}' not found in template spreadsheet", titl)
-  })?;
-
-  debug!(
-    "Using tempshid={} and tempindex={} from template spreadsheet for copy operation",
-    tempshid, tempindex
-  );
-
-  if let Some((destshid, _)) =
-    get_sheet_id_index(p.tsy.clone(), ept.clone(), destspshid.clone())
-      .await
-      .cwl("Failed to get sheet ID for checkbox operation")?
-  {
-    delete_sheet(p.tsy.clone(), &destspshid, destshid)
-      .await
-      .cwl("Could not delete sheet or sheet does not exist in the destination spreadsheet")?;
-  }
-
-  let url = format!(
-    "{}{}/sheets/{}:copyTo",
-    ep.base_url(),
-    template_sheet_id, // hardcoded template spreadsheet ID
-    tempshid           // this is the sheetid from template document
-  );
-
-  debug!("COPY OPERATION DEBUG:",);
-  debug!("  url = {}", url);
-  debug!("  source_spreadsheet_id = {}", template_sheet_id);
-  debug!("  source_sheet_id = {}", tempshid);
-  debug!("  dest_spreadsheet_id = {}", destspshid);
-  debug!("  sheet_name = {}", titl);
-
-  let mut er1 = String::new();
-
-  // NOTE sheetid for us is actually the spreadsheetid, careful
-  let body = json!({
-    "destinationSpreadsheetId": destspshid,
-  });
-
-  debug!("Request body: {:#?}", body);
-
-  if !er1.is_empty() {
-    warn!(errors = %er1, "Found errors in change_one_sheet_in_all");
-  } else {
-    debug!("All required keys present in change_one_sheet_in_all");
-  }
-
-  let au_build = req_build(
-    "POST",
-    &url,
-    Some(&tsyusr),
-    None,        // Pass all current queries here
-    Some(&body), // No JSON body for a GET "lists" operation
-  )
-  .cwl("Could not create the auth_builder for change_one_sheet_in_all")?;
-
-  debug!("About to call global sheets limiter...");
-  get_global_sheets_limiter().until_ready().await;
-  debug!("Global sheets limiter released, sending request...");
-
-  let res = au_build
-    .send()
-    .await
-    .cwl("Failed to send request for change_one_sheet_in_all")?;
-
-  debug!("Received response from copy operation");
-  debug!("Response status: {}", res.status());
-  debug!("This is res in change_one_sheet_in_all {:#?}", res);
-
-  match res.status().as_u16() {
-    200 => {
-      debug!("SUCCESS: Copy operation returned 200");
-      let rfin: Value = res
-        .json()
-        .await
-        .cwl("Failed to parse JSON response from Sheets API")?;
-
-      debug!("Copy response JSON: {:#?}", rfin);
-
-      update_db_good(id.clone()).await.cwl(
-        "Failed to update database with successful change_one_sheet_in_all result",
-      )?;
-
-      debug!("Database updated with good status");
-
-      // Extract the new sheet ID from the response
-      if let Some(new_sheet_id) = rfin.get("sheetId").and_then(|v| v.as_i64()) {
-        debug!(
-          "Extracted new sheet ID: {}, about to rename to '{}' at index {}",
-          new_sheet_id,
-          titl.to_uppercase(),
-          tempindex
-        );
-        rename_sheet_and_index(
-          p.tsy,
-          &destspshid,
-          new_sheet_id as i32,
-          &titl.to_uppercase(),
-          tempindex,
-        )
-        .await
-        .cwl("Could not rename new sheet")?;
-        debug!("Successfully renamed sheet to '{}'", titl.to_uppercase());
-      } else {
-        error!("No sheetId found in API response, skipping rename operation");
-      }
-      debug!("change_one_sheet_in_all completed successfully");
-    }
-    status => {
-      debug!("ERROR: Copy operation returned status {}", status);
-      let error_text = res.text().await.cwl(
-        "Failed to read error response body from Google Chrome Comercial API in change_one_sheet_in_all"
-      )?;
-
-      debug!("Error response body: {}", error_text);
-
-      // Add API error to er1
-      if !er1.is_empty() {
-        er1.push('\n');
-      }
-      er1.push_str(&format!(
-        "Status code: {status}\nError details: {error_text}"
-      ));
-
-      update_db_bad(er1, id.clone()).await.cwl(
-        "Failed to update database with change_one_sheet_in_all error result",
-      )?;
-
-      error!(
-        "Google Sheets API returned non-200 status: {} - Body: {}",
-        status, error_text
-      );
-      bail!("API error")
-    }
-  }
-
-  Ok(())
-}
+// COMMENTED OUT - NOT NEEDED FOR THIS PROJECT
+// pub async fn change_one_sheet_in_all(record: Value) -> AppResult<()> {
+//   let ep = Ep::Sheets;
+//   let template_sheet_id = &*TSHID;
+//
+//   let tsyusr = get_tok(
+//     "adminbot@adminbot-iedu-prod.iam.gserviceaccount.com".to_owned(),
+//     "yes",
+//   )
+//   .await
+//   .cwl("Failed to generate token for change_one_sheet_in_all")?;
+//
+//   let (id, data) = extract_record_parts(record.clone())?;
+//   let mut er1 = String::new();
+//
+//   let destspshid = check_key(&data, "spreadsheet_id", &mut er1)
+//     .and_then(|v| v.as_str())
+//     .unwrap_or("")
+//     .to_string();
+//
+//   let p = PETS
+//     .get()
+//     .await
+//     .cwl("Could not get pet fields for list_lics")?;
+//
+//   let args: Vec<&str> = p.params.split(", ").collect();
+//   let titl = args[0].trim(); // sheet to replace
+//
+//   let ept = match Ep::strtoenum(titl, false) {
+//     Some(ep) => ep,
+//     None => bail!(
+//       "Invalid sheet title '{}' - no matching endpoint found",
+//       titl
+//     ),
+//   };
+//
+//   let (tempshid, tempindex) = get_sheet_id_index(
+//     tsyusr.clone(),
+//     ept.clone(),
+//     template_sheet_id.to_string(),
+//   )
+//   .await
+//   .cwl("Failed to get sheet ID from template spreadsheet")?
+//   .ok_or_else(|| {
+//     anyhow::anyhow!("Sheet '{}' not found in template spreadsheet", titl)
+//   })?;
+//
+//   debug!(
+//     "Using tempshid={} and tempindex={} from template spreadsheet for copy operation",
+//     tempshid, tempindex
+//   );
+//
+//   if let Some((destshid, _)) =
+//     get_sheet_id_index(p.tsy.clone(), ept.clone(), destspshid.clone())
+//       .await
+//       .cwl("Failed to get sheet ID for checkbox operation")?
+//   {
+//     delete_sheet(p.tsy.clone(), &destspshid, destshid)
+//       .await
+//       .cwl("Could not delete sheet or sheet does not exist in the destination spreadsheet")?;
+//   }
+//
+//   let url = format!(
+//     "{}{}/sheets/{}:copyTo",
+//     ep.base_url(),
+//     template_sheet_id, // hardcoded template spreadsheet ID
+//     tempshid           // this is the sheetid from template document
+//   );
+//
+//   debug!("COPY OPERATION DEBUG:",);
+//   debug!("  url = {}", url);
+//   debug!("  source_spreadsheet_id = {}", template_sheet_id);
+//   debug!("  source_sheet_id = {}", tempshid);
+//   debug!("  dest_spreadsheet_id = {}", destspshid);
+//   debug!("  sheet_name = {}", titl);
+//
+//   let mut er1 = String::new();
+//
+//   // NOTE sheetid for us is actually the spreadsheetid, careful
+//   let body = json!({
+//     "destinationSpreadsheetId": destspshid,
+//   });
+//
+//   debug!("Request body: {:#?}", body);
+//
+//   if !er1.is_empty() {
+//     warn!(errors = %er1, "Found errors in change_one_sheet_in_all");
+//   } else {
+//     debug!("All required keys present in change_one_sheet_in_all");
+//   }
+//
+//   let au_build = req_build(
+//     "POST",
+//     &url,
+//     Some(&tsyusr),
+//     None,        // Pass all current queries here
+//     Some(&body), // No JSON body for a GET "lists" operation
+//   )
+//   .cwl("Could not create the auth_builder for change_one_sheet_in_all")?;
+//
+//   debug!("About to call global sheets limiter...");
+//   get_global_sheets_limiter().until_ready().await;
+//   debug!("Global sheets limiter released, sending request...");
+//
+//   let res = au_build
+//     .send()
+//     .await
+//     .cwl("Failed to send request for change_one_sheet_in_all")?;
+//
+//   debug!("Received response from copy operation");
+//   debug!("Response status: {}", res.status());
+//   debug!("This is res in change_one_sheet_in_all {:#?}", res);
+//
+//   match res.status().as_u16() {
+//     200 => {
+//       debug!("SUCCESS: Copy operation returned 200");
+//       let rfin: Value = res
+//         .json()
+//         .await
+//         .cwl("Failed to parse JSON response from Sheets API")?;
+//
+//       debug!("Copy response JSON: {:#?}", rfin);
+//
+//       update_db_good(id.clone()).await.cwl(
+//         "Failed to update database with successful change_one_sheet_in_all result",
+//       )?;
+//
+//       debug!("Database updated with good status");
+//
+//       // Extract the new sheet ID from the response
+//       if let Some(new_sheet_id) = rfin.get("sheetId").and_then(|v| v.as_i64()) {
+//         debug!(
+//           "Extracted new sheet ID: {}, about to rename to '{}' at index {}",
+//           new_sheet_id,
+//           titl.to_uppercase(),
+//           tempindex
+//         );
+//         rename_sheet_and_index(
+//           p.tsy,
+//           &destspshid,
+//           new_sheet_id as i32,
+//           &titl.to_uppercase(),
+//           tempindex,
+//         )
+//         .await
+//         .cwl("Could not rename new sheet")?;
+//         debug!("Successfully renamed sheet to '{}'", titl.to_uppercase());
+//       } else {
+//         error!("No sheetId found in API response, skipping rename operation");
+//       }
+//       debug!("change_one_sheet_in_all completed successfully");
+//     }
+//     status => {
+//       debug!("ERROR: Copy operation returned status {}", status);
+//       let error_text = res.text().await.cwl(
+//         "Failed to read error response body from Google Chrome Comercial API in change_one_sheet_in_all"
+//       )?;
+//
+//       debug!("Error response body: {}", error_text);
+//
+//       // Add API error to er1
+//       if !er1.is_empty() {
+//         er1.push('\n');
+//       }
+//       er1.push_str(&format!(
+//         "Status code: {status}\nError details: {error_text}"
+//       ));
+//
+//       update_db_bad(er1, id.clone()).await.cwl(
+//         "Failed to update database with change_one_sheet_in_all error result",
+//       )?;
+//
+//       error!(
+//         "Google Sheets API returned non-200 status: {} - Body: {}",
+//         status, error_text
+//       );
+//       bail!("API error")
+//     }
+//   }
+//
+//   Ok(())
+// }
 
 #[allow(dead_code)]
 pub async fn get_perms_file(

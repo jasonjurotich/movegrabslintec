@@ -182,9 +182,9 @@ pub async fn runmods(
           .await
           .cwl("Failed to list reports")?,
 
-        "cadsh" => change_one_sheet_in_all(record.clone())
-          .await
-          .cwl("Failed to copy admin sheet to other spreadsheets")?,
+        // "cadsh" => change_one_sheet_in_all(record.clone())
+        //   .await
+        //   .cwl("Failed to copy admin sheet to other spreadsheets")?,
 
         cmd if crate::surrealstart::get_other_commands().contains(&cmd) => {
           if let Err(e) = process_command(
