@@ -744,17 +744,17 @@ pub async fn mods<T: Into<Ep>>(
     .cwl("Failed to convert duration to usize")?;
   let tims = durs(duration_usize).await;
 
-  let epch2 = if ["mod", "modl"].contains(&lom) {
-    ep.chendmod(p.cmd.clone(), tims, tx)
-  } else if p.cmd == "li" && lom == "lmul" {
-    getnumqrylics(p.abr.clone(), tims)
-      .await
-      .cwl("Failed to get number query")?
-  } else {
-    getnumqry(ep.clone(), p.abr.clone(), p.cmd.clone(), tims)
-      .await
-      .cwl("Failed to get number query")?
-  };
+  // let epch2 = if ["mod", "modl"].contains(&lom) {
+  //   ep.chendmod(p.cmd.clone(), tims, tx)
+  // } else if p.cmd == "li" && lom == "lmul" {
+  //   getnumqrylics(p.abr.clone(), tims)
+  //     .await
+  //     .cwl("Failed to get number query")?
+  // } else {
+  //   getnumqry(ep.clone(), p.abr.clone(), p.cmd.clone(), tims)
+  //     .await
+  //     .cwl("Failed to get number query")?
+  // };
 
   // COMMENTED OUT - CHAT NOT NEEDED FOR THIS PROJECT
   // chres(epch2, p.sp.clone(), p.tsn.clone())

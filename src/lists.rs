@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub use super::aux_sur::*;
 pub use super::sheets::*;
 use crate::AppResult;
@@ -571,67 +573,6 @@ pub async fn qrys_users() -> AppResult<Value> {
 
   debug!("qrys_users: final qry = {:?}", qry);
   debug!("qrys_users: final qrys = {:?}", qrys);
-
-  Ok(qrys)
-}
-
-pub async fn qrys_courses() -> AppResult<Value> {
-  let p = PETS
-    .get()
-    .await
-    .cwl("Could not get pet fields for qrys_courses")?;
-
-  let args: Vec<String> = p
-    .params
-    .split(',')
-    .map(|s| s.trim().to_lowercase())
-    .collect();
-
-  debug!("qrys_courses: params = {:?}", p.params);
-  debug!("qrys_courses: args = {:?}, length = {}", args, args.len());
-
-  let qry = if args.is_empty() {
-    debug!("qrys_courses: taking empty args branch");
-    String::new()
-  } else if args.len() == 1 {
-    // Check if this is an archived command
-    if ["ac", "rac"].contains(&args[0].as_str()) {
-      debug!(
-        "qrys_courses: taking 1 arg archived branch, arg[0] = {:?}",
-        args[0]
-      );
-      let archived = if args[0] == "ac" {
-        "ARCHIVED"
-      } else {
-        "ACTIVE"
-      };
-      format!("courseStates={archived}")
-    } else {
-      debug!("qrys_courses: unknown 1 arg option: {:?}", args[0]);
-      String::new()
-    }
-  } else {
-    debug!(
-      "qrys_courses: taking default branch for {} args",
-      args.len()
-    );
-    String::new()
-  };
-
-  let mut qrys = json!({
-    "pageSize": "1000",
-  });
-
-  if !qry.is_empty() {
-    if qry.contains("ARCHIVED") {
-      qrys["courseStates"] = json!("ARCHIVED");
-    } else if qry.contains("ACTIVE") {
-      qrys["courseStates"] = json!("ACTIVE");
-    }
-  }
-
-  debug!("qrys_courses: final qry = {:?}", qry);
-  debug!("qrys_courses: final qrys = {:?}", qrys);
 
   Ok(qrys)
 }
