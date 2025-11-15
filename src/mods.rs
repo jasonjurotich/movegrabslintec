@@ -7,7 +7,13 @@ use crate::AppResult;
 use crate::jsonresfil::get_template_id_index;
 use crate::limiters::*;
 use crate::surrealstart::{
-  DB, PETS, Pets, SP, TSHID, getnumqry, is_list_command,
+  DB,
+  PETS,
+  Pets,
+  SP,
+  TSHID,
+  // getnumqry,
+  is_list_command,
 };
 use crate::tracer::ContextExt;
 use crate::{bail, debug, error, info, warn};
@@ -560,7 +566,7 @@ pub async fn mods<T: Into<Ep>>(
 
         // Handle OAuth token expiration - this runs once after all concurrent operations
         if oauth_expired {
-          let oauth_error_msg = "🚫 **PROCESO INTERRUMPIDO: Token de Google expirado**\n\n\
+          let _oauth_error_msg = "🚫 **PROCESO INTERRUMPIDO: Token de Google expirado**\n\n\
             El token de autenticación de Google ha expirado después de más de 90 minutos de procesamiento. \
             Google ya no acepta peticiones y el proceso debe reiniciarse.\n\n\
             **Acción requerida:** Por favor, ejecuta nuevamente el comando para continuar con las filas restantes.";
@@ -674,6 +680,7 @@ pub async fn mods<T: Into<Ep>>(
     tx = "Estos eran los errores que salieron: \n\n".to_string();
     tx.push_str(&errs2);
   } else {
+    // NOTE add this to the logs...
     tx = "No había errores registrados.".to_string();
   }
 
@@ -744,7 +751,7 @@ pub async fn mods<T: Into<Ep>>(
   let duration_usize: usize = duration
     .try_into()
     .cwl("Failed to convert duration to usize")?;
-  let tims = durs(duration_usize).await;
+  let _tims = durs(duration_usize).await;
 
   // let epch2 = if ["mod", "modl"].contains(&lom) {
   //   ep.chendmod(p.cmd.clone(), tims, tx)

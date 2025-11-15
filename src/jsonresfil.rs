@@ -459,7 +459,7 @@ pub async fn add_tokens_to_petitions(id: String) -> AppResult<bool> {
 
         if !is_authorized {
           warn!(user = %usr, abr = %finabr, "User is STILL NOT in admin list after refresh, sending unauthorized message and deleting petition");
-          let unauthorized_msg = format!(
+          let _unauthorized_msg = format!(
             "⛔ Unauthorized: {} No estas autorizado para usar este bot para el dominio {}. Habla con el admin de este servicio para tener acceso.",
             usr, finabr
           );
@@ -526,7 +526,7 @@ pub async fn add_tokens_to_petitions(id: String) -> AppResult<bool> {
 
       if auth_result == "false" {
         warn!(user = %usr, admin = %finadmin, "Admin does not have 2FA enabled, sending unauthorized message and deleting petition");
-        let unauthorized_msg = format!(
+        let _unauthorized_msg = format!(
           "⛔ Unauthorized: {} no tiene autenticación de dos pasos (2FA) activada. Debe activar 2FA para usar este bot.",
           finadmin
         );
