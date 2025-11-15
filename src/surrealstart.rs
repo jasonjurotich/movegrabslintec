@@ -897,8 +897,14 @@ static PETS_CACHE: LazyLock<PetsCache> =
   LazyLock::new(|| Arc::new(PLRwLock::new(std::collections::HashMap::new())));
 
 // Org-group mapping cache (abr -> HashMap<org, group>)
-pub static ORG_GROUP_CACHE: LazyLock<tokio::sync::Mutex<std::collections::HashMap<String, std::collections::HashMap<String, String>>>> =
-  LazyLock::new(|| tokio::sync::Mutex::new(std::collections::HashMap::new()));
+pub static ORG_GROUP_CACHE: LazyLock<
+  tokio::sync::Mutex<
+    std::collections::HashMap<
+      String,
+      std::collections::HashMap<String, String>,
+    >,
+  >,
+> = LazyLock::new(|| tokio::sync::Mutex::new(std::collections::HashMap::new()));
 
 // In-flight guard to coalesce concurrent fetches for the same ID
 type InflightMap = std::collections::HashMap<String, Arc<Notify>>;
@@ -2617,4 +2623,17 @@ pub fn map_subdomain_to_jsonf(email_domain: &str) -> Option<String> {
   // Add more domain groups here as needed in the future
 
   None
+}
+
+pub async fn getbytes(fil: &String) -> AppResult<String> {
+  let file = tfs::read(fil).await.unwrap();
+  let base64en = URL_SAFE_NO_PAD.encode(file);
+
+  let bn = base64en
+    .replace('/', "_")
+    .replace('+', "-")
+    .replace('=', "*")
+    .replace('=', ".");
+
+  Ok(bn)
 }
