@@ -637,14 +637,14 @@ macro_rules! get_admin {
   };
 }
 
-macro_rules! skip_if_admin_usr {
-  ($data:expr, $er1:expr, $msg:expr) => {
-    if get_admin!($data, $er1) {
-      warn!($msg);
-      return Ok(());
-    }
-  };
-}
+// macro_rules! skip_if_admin_usr {
+//   ($data:expr, $er1:expr, $msg:expr) => {
+//     if get_admin!($data, $er1) {
+//       warn!($msg);
+//       return Ok(());
+//     }
+//   };
+// }
 
 macro_rules! skip_if_admin {
   ($abr:expr, $usr:expr) => {
