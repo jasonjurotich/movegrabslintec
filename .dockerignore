@@ -1,0 +1,77 @@
+
+# Rust specific
+target/
+**/*.rs.bk
+*.pdb
+debug/
+release/
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+.github/
+.gitlab/
+
+# Docker
+Dockerfile*
+docker-compose*
+.docker/
+.dockerignore
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+*.bak
+*.orig
+.project
+.classpath
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# OS specific
+.DS_Store
+Thumbs.db
+*.tmp
+*.temp
+
+# Environment & config files
+.env*
+.config/
+*.local
+*.local.*
+
+# Documentation
+docs/
+*.md
+LICENSE*
+README*
+
+# Testing
+tests/
+coverage/
+*.test
+*.spec
+
+# Log files
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Development tools
+benches/
+examples/
+scripts/
+tools/
+
+# Dependencies & lockfiles that should be rebuilt
+node_modules/
+# Only uncomment if you want to rebuild dependencies every time
+# Cargo.lock
+
