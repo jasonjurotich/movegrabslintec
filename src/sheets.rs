@@ -1246,7 +1246,7 @@ pub async fn setup_lictyp() -> AppResult<()> {
     .cwl("Failed to convert duration to usize")?;
   let tims = durs(duration_usize).await;
 
-  let epch2 = getnumqry(ep.clone(), p.abr.clone(), p.cmd.clone(), tims)
+  let _epch2 = getnumqry(ep.clone(), p.abr.clone(), p.cmd.clone(), tims)
     .await
     .cwl("Failed to get number query")?;
 
