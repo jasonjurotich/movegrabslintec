@@ -36,14 +36,7 @@ reqwest = { version = "0.12.24", default-features = false, features = [
   "default-tls",
 ] }
 
-surrealdb = { version = "2.3.10", features = [
-  "kv-surrealkv",
-  "kv-mem",
-  "protocol-http",
-  "protocol-ws",
-  "rustls",
-  "native-tls",
-] }
+surrealdb = { version = "2.3.10", features = ["kv-surrealkv", "kv-mem"] }
 
 dotenv = "0.15.0"
 rand = "0.9.2"
@@ -54,7 +47,6 @@ uuid = { version = "1.18", features = ["v7"] }
 regex = "*"
 governor = "*"
 lazy_static = "1.5.0"
-# nonzero_ext = "*"
 
 chrono = { version = "0.4.42", features = ["serde"] }
 anyhow = "*"
