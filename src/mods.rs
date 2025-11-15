@@ -682,6 +682,7 @@ pub async fn mods<T: Into<Ep>>(
   } else {
     // NOTE add this to the logs...
     tx = "No había errores registrados.".to_string();
+    debug!("This is tx {:#?}", tx);
   }
 
   // NOTE NEVER TOUCH THIS! when there are two sheets involved, the first toshs gets the actual lists
