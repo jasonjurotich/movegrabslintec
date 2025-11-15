@@ -1,6 +1,10 @@
 use super::apis::*;
 use crate::AppResult;
+use crate::goauth::get_token_for_secrets;
 use crate::limiters::get_global_sheets_limiter;
+use crate::surrealstart::{
+  getnumqry, google_to_sheetsdb, req_build, DB, EM, PETS, Pets,
+};
 use crate::tracer::ContextExt;
 use crate::{bail, debug, error, info, warn};
 use regex::Regex;
@@ -1189,13 +1193,14 @@ pub async fn setup_lictyp() -> AppResult<()> {
     .await
     .cwl("Could not get pet fields for function_one")?;
 
-  let epch1 = chstlinit(ep.clone(), p.cmd.clone())
-    .await
-    .cwl("Could not get chat init text")?;
-
-  chres(epch1, p.sp.clone(), p.tsn.clone())
-    .await
-    .cwl("Failed to send start mod chat message")?;
+  // COMMENTED OUT - CHAT NOT NEEDED FOR THIS PROJECT
+  // let epch1 = chstlinit(ep.clone(), p.cmd.clone())
+  //   .await
+  //   .cwl("Could not get chat init text")?;
+  //
+  // chres(epch1, p.sp.clone(), p.tsn.clone())
+  //   .await
+  //   .cwl("Failed to send start mod chat message")?;
 
   let record_count = count_db(p.abr.clone(), ep.clone())
     .await
@@ -1243,9 +1248,10 @@ pub async fn setup_lictyp() -> AppResult<()> {
     .await
     .cwl("Failed to get number query")?;
 
-  chres(epch2, p.sp, p.tsn)
-    .await
-    .cwl("Failed to send end mod chat message")?;
+  // COMMENTED OUT - CHAT NOT NEEDED FOR THIS PROJECT
+  // chres(epch2, p.sp, p.tsn)
+  //   .await
+  //   .cwl("Failed to send end mod chat message")?;
 
   Ok(())
 }

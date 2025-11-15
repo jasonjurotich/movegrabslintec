@@ -2,7 +2,15 @@ pub use super::apis::*;
 pub use super::lists::*;
 pub use super::mod_process::*;
 use crate::AppResult;
-use crate::surrealstart::{Pets, SP, TSHID, is_list_command};
+use crate::aux_sur::*;
+use crate::goauth::get_tok;
+use crate::jsonresfil::get_template_id_index;
+use crate::limiters::*;
+use crate::sheets::*;
+use crate::surrealstart::{
+  getnumqry, google_to_sheetsdb, req_build, Pets, SP, TSHID, is_list_command,
+  DB, EM, PETS,
+};
 use crate::tracer::ContextExt;
 use crate::{bail, debug, error, info, warn};
 use futures::future::join_all;
@@ -355,17 +363,18 @@ pub async fn mods<T: Into<Ep>>(
     ep.modlst()
   };
 
-  let epch1 = if ["mod", "modl"].contains(&lom) {
-    ep.chstmod(p.cmd.clone())
-  } else {
-    chstlinit(ep.clone(), p.cmd.clone())
-      .await
-      .cwl("Could not get chat init text")?
-  };
-
-  chres(epch1, p.sp.clone(), p.tsn.clone())
-    .await
-    .cwl("Failed to send start mod chat message")?;
+  // COMMENTED OUT - CHAT NOT NEEDED FOR THIS PROJECT
+  // let epch1 = if ["mod", "modl"].contains(&lom) {
+  //   ep.chstmod(p.cmd.clone())
+  // } else {
+  //   chstlinit(ep.clone(), p.cmd.clone())
+  //     .await
+  //     .cwl("Could not get chat init text")?
+  // };
+  //
+  // chres(epch1, p.sp.clone(), p.tsn.clone())
+  //   .await
+  //   .cwl("Failed to send start mod chat message")?;
 
   // NOTE deldbs empties both databases, you do NOT empty the google database for just mods
   if lom == "l_one" {
@@ -439,11 +448,12 @@ pub async fn mods<T: Into<Ep>>(
         "Processing create orgs from orgbase command synchronously with {} rows",
         updated_rows.len()
       );
-      if let Err(e) = create_orgs_orgbase(updated_rows, p, &mut errs1).await {
-        let error_msg = format!("create_orgs_orgbase failed: {}", e);
-        error!(error = %error_msg, "Create orgs orgbase failed");
-        errs1.push(error_msg);
-      }
+      // COMMENTED OUT - NOT NEEDED FOR THIS PROJECT
+      // if let Err(e) = create_orgs_orgbase(updated_rows, p, &mut errs1).await {
+      //   let error_msg = format!("create_orgs_orgbase failed: {}", e);
+      //   error!(error = %error_msg, "Create orgs orgbase failed");
+      //   errs1.push(error_msg);
+      // }
       // Skip the parallel processing since we handled the rows synchronously
     } else {
       // debug!("This is results from database in mods {:#?}", updated_rows);
@@ -633,13 +643,14 @@ pub async fn mods<T: Into<Ep>>(
             Google ya no acepta peticiones y el proceso debe reiniciarse.\n\n\
             **Acción requerida:** Por favor, ejecuta nuevamente el comando para continuar con las filas restantes.";
 
-          // Send chat notification about the OAuth expiration
-          if let Err(e) =
-            chres(oauth_error_msg.to_string(), p.sp.clone(), p.tsn.clone())
-              .await
-          {
-            warn!("Failed to send OAuth expiration chat notification: {}", e);
-          }
+          // COMMENTED OUT - CHAT NOT NEEDED FOR THIS PROJECT
+          // // Send chat notification about the OAuth expiration
+          // if let Err(e) =
+          //   chres(oauth_error_msg.to_string(), p.sp.clone(), p.tsn.clone())
+          //     .await
+          // {
+          //   warn!("Failed to send OAuth expiration chat notification: {}", e);
+          // }
 
           // Update Google Sheets with remaining rows that need to be processed
           if let Err(e) = update_sheets_with_remaining_rows(ep.clone(), p).await
@@ -825,9 +836,10 @@ pub async fn mods<T: Into<Ep>>(
       .cwl("Failed to get number query")?
   };
 
-  chres(epch2, p.sp.clone(), p.tsn.clone())
-    .await
-    .cwl("Failed to send end mod chat message")?;
+  // COMMENTED OUT - CHAT NOT NEEDED FOR THIS PROJECT
+  // chres(epch2, p.sp.clone(), p.tsn.clone())
+  //   .await
+  //   .cwl("Failed to send end mod chat message")?;
 
   // Send email notification for completed mod commands (not list commands)
   if ["mod", "modl"].contains(&lom) {
@@ -835,9 +847,10 @@ pub async fn mods<T: Into<Ep>>(
       "Sending email notification for completed mod command: {}",
       p.cmd
     );
-    if let Err(e) = sendgmsop(p).await {
-      warn!("Failed to send email notification: {}", e);
-    }
+    // COMMENTED OUT - EMAIL NOTIFICATION NOT NEEDED FOR THIS PROJECT
+    // if let Err(e) = sendgmsop(p).await {
+    //   warn!("Failed to send email notification: {}", e);
+    // }
   }
 
   // debug!("{}", ep.chendmod(cmd, tims, tx));

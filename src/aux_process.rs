@@ -807,42 +807,50 @@ pub async fn fix_body_usrs(record: Value, p: &Pets) -> AppResult<Value> {
     .unwrap_or("/")
     .to_string();
 
-  let first_names_for_email = process_first_names(&nombres_raw);
-  let last_names_for_email = process_last_names(&apellidos_raw);
-  debug!("This is last_names_for_email {:#?}", last_names_for_email);
+  // COMMENTED OUT - NAME PROCESSING FUNCTIONS NOT NEEDED FOR THIS PROJECT
+  // let first_names_for_email = process_first_names(&nombres_raw);
+  // let last_names_for_email = process_last_names(&apellidos_raw);
+  // debug!("This is last_names_for_email {:#?}", last_names_for_email);
+  //
+  // let first_names_for_display =
+  //   process_first_names_for_display(&nombres_raw, &p.cmd);
+  // let last_names_for_display = process_last_names_for_display(&apellidos_raw);
+  //
+  // let cleaned_nombres = first_names_for_display.join(" ");
+  // let cleaned_apellidos = last_names_for_display.join(" ");
+  //
+  // let use_dots = matches!(
+  //   p.abr.as_str(),
+  //   "jeebmex"
+  //     | "lopgon"
+  //     | "cerver"
+  //     | "lsopue"
+  //     | "altvis"
+  //     | "cenccvi"
+  //     | "imexpue"
+  //     | "damic"
+  //     | "coldis"
+  //     | "colalt"
+  //     | "disacad"
+  //     | "samteq"
+  //     | "jsmmic"
+  //     | "iplcoa"
+  // );
+  //
+  // let (usr, pwd, fixed) = generate_username_password(
+  //   &data,
+  //   &first_names_for_email,
+  //   &last_names_for_email,
+  //   use_dots,
+  //   p,
+  // );
 
-  let first_names_for_display =
-    process_first_names_for_display(&nombres_raw, &p.cmd);
-  let last_names_for_display = process_last_names_for_display(&apellidos_raw);
-
-  let cleaned_nombres = first_names_for_display.join(" ");
-  let cleaned_apellidos = last_names_for_display.join(" ");
-
-  let use_dots = matches!(
-    p.abr.as_str(),
-    "jeebmex"
-      | "lopgon"
-      | "cerver"
-      | "lsopue"
-      | "altvis"
-      | "cenccvi"
-      | "imexpue"
-      | "damic"
-      | "coldis"
-      | "colalt"
-      | "disacad"
-      | "samteq"
-      | "jsmmic"
-      | "iplcoa"
-  );
-
-  let (usr, pwd, fixed) = generate_username_password(
-    &data,
-    &first_names_for_email,
-    &last_names_for_email,
-    use_dots,
-    p,
-  );
+  // Temporary placeholder values
+  let cleaned_nombres = nombres_raw.clone();
+  let cleaned_apellidos = apellidos_raw.clone();
+  let usr = "placeholder_user".to_string();
+  let pwd = "placeholder_pwd".to_string();
+  let fixed = false;
 
   if p.cmd == "cuf" && usr.is_empty() {
     bail!(
@@ -1984,139 +1992,141 @@ pub async fn upload_pdf_drive(
   }
 }
 
-pub async fn create_orgs_orgbase(
-  rows: Vec<Value>,
-  p: &Pets,
-  errs1: &mut Vec<String>,
-) -> AppResult<()> {
-  let ep = Ep::Orgs;
+// COMMENTED OUT - NOT NEEDED FOR THIS PROJECT
+// pub async fn create_orgs_orgbase(
+//   rows: Vec<Value>,
+//   p: &Pets,
+//   errs1: &mut Vec<String>,
+// ) -> AppResult<()> {
+//   let ep = Ep::Orgs;
+//
+//   if !rows.is_empty() {
+//     let org_limiter = create_rate_limiter(Ep::Orgbase.modvlow());
 
-  if !rows.is_empty() {
-    let org_limiter = create_rate_limiter(Ep::Orgbase.modvlow());
-
-    // Sort rows by data.id to ensure proper dependency order
-    let mut sorted_rows = rows;
-    sorted_rows.sort_by(|a, b| {
-      let a_id = a
-        .get("data")
-        .and_then(|data| data.get("id"))
-        .and_then(|id| id.as_i64())
-        .unwrap_or(0);
-      let b_id = b
-        .get("data")
-        .and_then(|data| data.get("id"))
-        .and_then(|id| id.as_i64())
-        .unwrap_or(0);
-      a_id.cmp(&b_id)
-    });
-
-    // Process rows synchronously (one by one) to respect dependencies
-    for record in sorted_rows {
-      let (id, data) = extract_record_parts(record.clone())?;
-      let mut er1 = String::new();
-
-      let name = check_key(&data, "nombre", &mut er1)
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
-
-      let parent_path = check_key(&data, "org_principal", &mut er1)
-        .and_then(|v| v.as_str())
-        .unwrap_or("/");
-
-      validate_required_fields!(data, er1, "create_ors_orgbase", id);
-
-      // if name.is_empty() {
-      //   let error_msg = format!("Skipping record {} - empty name", id);
-      //   error!(error = %error_msg, "Record validation failed");
-      //   errs1.push(error_msg);
-      //   continue;
-      // }
-
-      let body = json!({
-        "name": name,
-        "description": name,
-        "parentOrgUnitPath": parent_path,
-        "blockInheritance": false,
-      });
-
-      let au_build = req_build(
-        "POST",
-        ep.base_url(),
-        Some(&p.tsy.clone()),
-        None,
-        Some(&body),
-      )
-      .cwl("Could not create request builder in create_orgs_orgbase")?;
-
-      org_limiter.until_ready().await;
-
-      let res = au_build
-        .send()
-        .await
-        .cwl("Failed to send request in create_orgs_orgbase")?;
-
-      match res.status().as_u16() {
-        200..=299 => {
-          debug!("Successfully created org: {}", name);
-          let rfin: Value = res
-            .json()
-            .await
-            .cwl("Failed to parse JSON response from Orgs API")?;
-
-          update_rows_good(id, rfin, p, None).await.cwl(
-            "Failed to update database with successful create_orgs_orgbase result",
-          )?;
-        }
-        409 => {
-          warn!(
-            "Org {} already exists - continuing with command execution.",
-            name
-          );
-          // Mark as successful since org exists
-          let rfin =
-            json!({"id": name, "name": name, "parentOrgUnitPath": parent_path});
-          update_rows_good(id, rfin, p, None)
-            .await
-            .cwl("Failed to update database with existing org result")?;
-        }
-        status => {
-          let error_text = res
-            .text()
-            .await
-            .cwl("Failed to read error response body in create_orgs_orgbase")?;
-
-          let clean_error_details = parse_google_api_error(&error_text);
-
-          let error_msg = format!(
-            "create_orgs_orgbase failed for org {} - Status: {} {} - {}",
-            name,
-            status,
-            get_status_code_name(status),
-            clean_error_details
-          );
-
-          error!(error = %error_msg, "Organization creation failed");
-          errs1.push(error_msg.clone());
-
-          update_db_bad(error_msg.clone(), id)
-            .await
-            .cwl("Failed to update database with create_orgs_orgbase error")?;
-        }
-      }
-    }
-  }
-
-  Ok(())
-}
+//     // Sort rows by data.id to ensure proper dependency order
+//     let mut sorted_rows = rows;
+//     sorted_rows.sort_by(|a, b| {
+//       let a_id = a
+//         .get("data")
+//         .and_then(|data| data.get("id"))
+//         .and_then(|id| id.as_i64())
+//         .unwrap_or(0);
+//       let b_id = b
+//         .get("data")
+//         .and_then(|data| data.get("id"))
+//         .and_then(|id| id.as_i64())
+//         .unwrap_or(0);
+//       a_id.cmp(&b_id)
+//     });
+// 
+//     // Process rows synchronously (one by one) to respect dependencies
+//     for record in sorted_rows {
+//       let (id, data) = extract_record_parts(record.clone())?;
+//       let mut er1 = String::new();
+// 
+//       let name = check_key(&data, "nombre", &mut er1)
+//         .and_then(|v| v.as_str())
+//         .unwrap_or("");
+// 
+//       let parent_path = check_key(&data, "org_principal", &mut er1)
+//         .and_then(|v| v.as_str())
+//         .unwrap_or("/");
+// 
+//       validate_required_fields!(data, er1, "create_ors_orgbase", id);
+// 
+//       // if name.is_empty() {
+//       //   let error_msg = format!("Skipping record {} - empty name", id);
+//       //   error!(error = %error_msg, "Record validation failed");
+//       //   errs1.push(error_msg);
+//       //   continue;
+//       // }
+// 
+//       let body = json!({
+//         "name": name,
+//         "description": name,
+//         "parentOrgUnitPath": parent_path,
+//         "blockInheritance": false,
+//       });
+// 
+//       let au_build = req_build(
+//         "POST",
+//         ep.base_url(),
+//         Some(&p.tsy.clone()),
+//         None,
+//         Some(&body),
+//       )
+//       .cwl("Could not create request builder in create_orgs_orgbase")?;
+// 
+//       org_limiter.until_ready().await;
+// 
+//       let res = au_build
+//         .send()
+//         .await
+//         .cwl("Failed to send request in create_orgs_orgbase")?;
+// 
+//       match res.status().as_u16() {
+//         200..=299 => {
+//           debug!("Successfully created org: {}", name);
+//           let rfin: Value = res
+//             .json()
+//             .await
+//             .cwl("Failed to parse JSON response from Orgs API")?;
+// 
+//           update_rows_good(id, rfin, p, None).await.cwl(
+//             "Failed to update database with successful create_orgs_orgbase result",
+//           )?;
+//         }
+//         409 => {
+//           warn!(
+//             "Org {} already exists - continuing with command execution.",
+//             name
+//           );
+//           // Mark as successful since org exists
+//           let rfin =
+//             json!({"id": name, "name": name, "parentOrgUnitPath": parent_path});
+//           update_rows_good(id, rfin, p, None)
+//             .await
+//             .cwl("Failed to update database with existing org result")?;
+//         }
+//         status => {
+//           let error_text = res
+//             .text()
+//             .await
+//             .cwl("Failed to read error response body in create_orgs_orgbase")?;
+// 
+//           let clean_error_details = parse_google_api_error(&error_text);
+// 
+//           let error_msg = format!(
+//             "create_orgs_orgbase failed for org {} - Status: {} {} - {}",
+//             name,
+//             status,
+//             get_status_code_name(status),
+//             clean_error_details
+//           );
+// 
+//           error!(error = %error_msg, "Organization creation failed");
+//           errs1.push(error_msg.clone());
+// 
+//           update_db_bad(error_msg.clone(), id)
+//             .await
+//             .cwl("Failed to update database with create_orgs_orgbase error")?;
+//         }
+//       }
+//     }
+//   }
+// 
+//   Ok(())
+// }
 
 pub async fn pet_sum(p: &Pets) -> AppResult<()> {
   let txs = get_petition_summary_by_domain(p)
     .await
     .cwl("Could not get petition summary.")?;
 
-  chres(txs, "".to_string(), p.tsn.clone())
-    .await
-    .cwl("Could not send chat to space.")?;
+  // COMMENTED OUT - CHAT NOT NEEDED FOR THIS PROJECT
+  // chres(txs, "".to_string(), p.tsn.clone())
+  //   .await
+  //   .cwl("Could not send chat to space.")?;
   Ok(())
 }
 

@@ -15,6 +15,8 @@
 // NOTE you CANNOT use embedding mode if the dabase goes over 1GB of space, it tries to put it all in memory and takes almost a minute! use ony for when it does not go over 300 mb
 
 // use crate::apis::check_key;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine;
 use dotenv::dotenv;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use reqwest::{Client, Method, RequestBuilder};
@@ -42,6 +44,7 @@ use parking_lot::RwLock as PLRwLock;
 use std::ops::Deref;
 use std::sync::Mutex;
 use std::sync::{Arc, RwLock as StdRwLock};
+use tokio::fs as tfs;
 use tokio::sync::Notify;
 
 pub use super::apis::*;
@@ -1418,10 +1421,11 @@ pub async fn gdatabase_to_sheetsdb<T: Into<Ep>>(
         Ok((start, end)) => (start, end),
         Err(error_msg) => {
           error!("Date validation failed: {}", error_msg);
-          // Send error message to chat and return early
-          if let Err(e) = chreserrs(error_msg).await {
-            error!("Failed to send error message to chat: {}", e);
-          }
+          // COMMENTED OUT - CHAT NOT NEEDED FOR THIS PROJECT
+          // // Send error message to chat and return early
+          // if let Err(e) = chreserrs(error_msg).await {
+          //   error!("Failed to send error message to chat: {}", e);
+          // }
           return Ok(());
         }
       };

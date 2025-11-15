@@ -201,12 +201,13 @@ pub async fn from_event(evs: &Event, args: String) -> AppResult<String> {
     Err(e) => {
       if e.to_string().contains("UNAUTHORIZED_DOMAIN") {
         warn!("Unauthorized domain detected: {}", e);
-        chreserrs(format!(
-          "UNAUTHORIZED DOMAIN ATTEMPT: {} | User: {} | Event type: {}",
-          e, usr, event_type
-        ))
-        .await
-        .cwl("Failed to send unauthorized domain alert to superadmin")?;
+        // COMMENTED OUT - CHAT NOT NEEDED FOR THIS PROJECT
+        // chreserrs(format!(
+        //   "UNAUTHORIZED DOMAIN ATTEMPT: {} | User: {} | Event type: {}",
+        //   e, usr, event_type
+        // ))
+        // .await
+        // .cwl("Failed to send unauthorized domain alert to superadmin")?;
         return Ok("".to_string());
       } else {
         return Err(e).cwl("Failed to get admin info");
@@ -458,9 +459,10 @@ pub async fn add_tokens_to_petitions(id: String) -> AppResult<bool> {
             "⛔ Unauthorized: {} No estas autorizado para usar este bot para el dominio {}. Habla con el admin de este servicio para tener acceso.",
             usr, finabr
           );
-          chres(unauthorized_msg, space.clone(), tsn.clone())
-            .await
-            .cwl("Failed to send unauthorized message to user")?;
+          // COMMENTED OUT - CHAT NOT NEEDED FOR THIS PROJECT
+          // chres(unauthorized_msg, space.clone(), tsn.clone())
+          //   .await
+          //   .cwl("Failed to send unauthorized message to user")?;
 
           let delete_query = "delete type::record($record_id);";
           DB.query(delete_query)
@@ -524,9 +526,10 @@ pub async fn add_tokens_to_petitions(id: String) -> AppResult<bool> {
           "⛔ Unauthorized: {} no tiene autenticación de dos pasos (2FA) activada. Debe activar 2FA para usar este bot.",
           finadmin
         );
-        chres(unauthorized_msg, space.clone(), tsn.clone())
-          .await
-          .cwl("Failed to send 2FA unauthorized message to user")?;
+        // COMMENTED OUT - CHAT NOT NEEDED FOR THIS PROJECT
+        // chres(unauthorized_msg, space.clone(), tsn.clone())
+        //   .await
+        //   .cwl("Failed to send 2FA unauthorized message to user")?;
 
         let delete_query = "delete type::record($record_id);";
         DB.query(delete_query)
