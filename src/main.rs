@@ -1,4 +1,5 @@
 mod apis;
+mod aux_drive;
 mod aux_process;
 mod aux_sur;
 
@@ -14,6 +15,7 @@ mod sheets;
 mod surrealstart;
 mod tracer;
 
+use aux_drive::*;
 use goauth::*;
 use tracer::*;
 
@@ -122,10 +124,213 @@ async fn main() {
 }
 
 async fn movevideosmul() -> AppResult<()> {
-  let grabfol1 = "grabacionesmeet";
-  let grabfol2 = "GRABACIONES RESPALDO";
+  let group_email_base = "grabacionesmeet";
+  let shared_drive_name = "GRABACIONES RESPALDO";
+  let domain = "linguatec.com.mx"; // TODO: Make this configurable
+  let abr = "linguatec"; // TODO: Make this configurable from static config
 
-  debug!("This is folders {:#?}", grabfol1);
+  info!("=== Starting movevideosmul workflow ===");
+  info!("Group: {}@{}", group_email_base, domain);
+  info!("Shared drive: {}", shared_drive_name);
 
+  // Get admin token for API calls
+  let admin_token = get_token_for_secrets()
+    .await
+    .cwl("Failed to get admin token")?;
+
+  // Step 1: Find or create the main shared drive
+  info!(
+    "Step 1: Finding or creating shared drive '{}'",
+    shared_drive_name
+  );
+  let shared_drive_id =
+    match find_shared_drive_by_name(shared_drive_name, &admin_token).await? {
+      Some(id) => {
+        info!("Found existing shared drive: {}", id);
+        id
+      }
+      None => {
+        info!("Shared drive not found, creating new one");
+        let id = create_shared_drive(shared_drive_name, &admin_token).await?;
+        info!("Created new shared drive: {}", id);
+        id
+      }
+    };
+
+  // Step 2: Add temporary permission for grabacionesmeet group
+  let group_email_full = format!("{}@{}", group_email_base, domain);
+  info!("Step 2: Adding writer permission for {}", group_email_full);
+  add_permission_to_file(
+    &shared_drive_id,
+    &group_email_full,
+    "writer",
+    &admin_token,
+  )
+  .await
+  .cwl("Failed to add group permission")?;
+
+  // Step 3: Get list of professors (optionally filter by group members)
+  info!("Step 3: Getting list of professors");
+
+  // Option: Filter by group members (uncomment if needed)
+  // let group_members = get_group_members(&group_email_full, &admin_token).await?;
+  // let professors = get_professors(abr, Some(group_members)).await?;
+
+  // Or get all professors:
+  let professors = get_professors(abr, None).await?;
+  info!("Found {} professors", professors.len());
+
+  // Step 4: For each professor, find their Meet Recordings folder and get videos
+  info!("Step 4: Finding Meet Recordings folders and collecting videos");
+
+  let mut all_videos: Vec<(Professor, Vec<VideoFile>)> = Vec::new();
+
+  // Process professors in chunks to avoid overwhelming the API
+  use futures::stream::{self, StreamExt};
+
+  let chunk_size = 30;
+  let chunks: Vec<_> = professors.chunks(chunk_size).collect();
+
+  for (chunk_idx, chunk) in chunks.iter().enumerate() {
+    info!(
+      "Processing professor chunk {}/{}",
+      chunk_idx + 1,
+      chunks.len()
+    );
+
+    let results = stream::iter(chunk.iter())
+      .map(|prof| async {
+        // Get impersonated token for this professor
+        // Note: You'll need to implement JWT token generation for impersonation
+        // For now, using admin token
+        let token = &admin_token;
+
+        // Find Meet Recordings folder
+        match find_meet_recordings_folder(&prof.email, token).await {
+          Ok(Some(folder)) => {
+            debug!("Found Meet folder for {}: {}", prof.email, folder.id);
+
+            // Get videos from folder
+            match get_videos_from_folder(&folder.id, &prof.email, token).await {
+              Ok(videos) => {
+                info!("Found {} videos for {}", videos.len(), prof.email);
+                Some((prof.clone(), videos))
+              }
+              Err(e) => {
+                warn!("Failed to get videos for {}: {}", prof.email, e);
+                None
+              }
+            }
+          }
+          Ok(None) => {
+            debug!("No Meet Recordings folder for {}", prof.email);
+            None
+          }
+          Err(e) => {
+            warn!("Error finding Meet folder for {}: {}", prof.email, e);
+            None
+          }
+        }
+      })
+      .buffer_unordered(chunk_size)
+      .collect::<Vec<_>>()
+      .await;
+
+    all_videos.extend(results.into_iter().flatten());
+  }
+
+  info!("Total professors with videos: {}", all_videos.len());
+  let total_videos: usize =
+    all_videos.iter().map(|(_, videos)| videos.len()).sum();
+  info!("Total videos to move: {}", total_videos);
+
+  // Step 5: Create a folder in the shared drive for each professor
+  info!("Step 5: Creating professor-specific folders in shared drive");
+
+  use std::collections::HashMap;
+  let mut professor_folders: HashMap<String, String> = HashMap::new();
+
+  for (prof, videos) in &all_videos {
+    if videos.is_empty() {
+      continue;
+    }
+
+    let folder_name = format!("GRABS RESPALDO {}", prof.email);
+
+    match create_folder_in_shared_drive(
+      &folder_name,
+      &shared_drive_id,
+      &admin_token,
+    )
+    .await
+    {
+      Ok(folder_id) => {
+        info!("Created folder '{}': {}", folder_name, folder_id);
+        professor_folders.insert(prof.email.clone(), folder_id);
+      }
+      Err(e) => {
+        warn!("Failed to create folder for {}: {}", prof.email, e);
+      }
+    }
+  }
+
+  // Step 6: Index the shared drive contents to verify folders
+  info!("Step 6: Indexing shared drive contents");
+  let drive_items =
+    index_shared_drive_contents(&shared_drive_id, &admin_token).await?;
+  info!("Found {} items in shared drive", drive_items.len());
+
+  // Step 7: Move videos to their respective professor folders
+  info!("Step 7: Moving videos to professor folders");
+
+  let mut move_count = 0;
+  let mut error_count = 0;
+
+  for (prof, videos) in &all_videos {
+    if let Some(dest_folder_id) = professor_folders.get(&prof.email) {
+      info!("Moving {} videos for {}", videos.len(), prof.email);
+
+      for video in videos {
+        if let Some(ref current_parent) = video.parent_folder_id {
+          // Get impersonated token for moving files
+          // For now using admin token
+          let token = &admin_token;
+
+          match move_video_file(
+            &video.id,
+            current_parent,
+            dest_folder_id,
+            token,
+          )
+          .await
+          {
+            Ok(_) => {
+              move_count += 1;
+              debug!("Moved video: {}", video.name);
+            }
+            Err(e) => {
+              error_count += 1;
+              warn!("Failed to move video {}: {}", video.name, e);
+            }
+          }
+        } else {
+          warn!("Video {} has no parent folder, skipping", video.name);
+        }
+      }
+    }
+  }
+
+  info!("Successfully moved {} videos", move_count);
+  if error_count > 0 {
+    warn!("Failed to move {} videos", error_count);
+  }
+
+  // Step 8: Remove the group permission
+  info!("Step 8: Removing group permission from shared drive");
+  delete_group_permission(&shared_drive_id, &group_email_full, &admin_token)
+    .await
+    .cwl("Failed to remove group permission")?;
+
+  info!("=== movevideosmul workflow completed successfully ===");
   Ok(())
 }
