@@ -129,16 +129,20 @@ async fn movevideosmul() -> AppResult<()> {
   let group_email_base = "grabacionesmeet";
   let shared_drive_name = "GRABACIONES RESPALDO";
   let domain = "linguatec.com.mx"; // TODO: Make this configurable
-  let abr = "linguatec"; // TODO: Make this configurable from static config
+  let abr = "lintec"; // TODO: Make this configurable from static config
+  let admin_email = "ieducando@linguatec.com.mx";
 
   info!("=== Starting movevideosmul workflow ===");
   info!("Group: {}@{}", group_email_base, domain);
   info!("Shared drive: {}", shared_drive_name);
+  info!("Admin email: {}", admin_email);
 
-  // Get admin token for API calls
-  let admin_token = get_token_for_secrets()
+  // Get admin token with subject (tsy) for Drive/Workspace API calls
+  // NOTE: tsy (token subject yes) is used for all Google Workspace operations
+  // that require domain-wide delegation (Drive, Groups, etc.)
+  let tsy = get_tok(admin_email.to_string(), "yes")
     .await
-    .cwl("Failed to get admin token")?;
+    .cwl("Failed to get tsy admin token")?;
 
   // Step 1: Find or create the main shared drive
   info!(
@@ -146,14 +150,14 @@ async fn movevideosmul() -> AppResult<()> {
     shared_drive_name
   );
   let shared_drive_id =
-    match find_shared_drive_by_name(shared_drive_name, &admin_token).await? {
+    match find_shared_drive_by_name(shared_drive_name, &tsy).await? {
       Some(id) => {
         info!("Found existing shared drive: {}", id);
         id
       }
       None => {
         info!("Shared drive not found, creating new one");
-        let id = create_shared_drive(shared_drive_name, &admin_token).await?;
+        let id = create_shared_drive(shared_drive_name, &tsy).await?;
         info!("Created new shared drive: {}", id);
         id
       }
@@ -162,20 +166,15 @@ async fn movevideosmul() -> AppResult<()> {
   // Step 2: Add temporary permission for grabacionesmeet group
   let group_email_full = format!("{}@{}", group_email_base, domain);
   info!("Step 2: Adding writer permission for {}", group_email_full);
-  add_permission_to_file(
-    &shared_drive_id,
-    &group_email_full,
-    "writer",
-    &admin_token,
-  )
-  .await
-  .cwl("Failed to add group permission")?;
+  add_permission_to_file(&shared_drive_id, &group_email_full, "writer", &tsy)
+    .await
+    .cwl("Failed to add group permission")?;
 
   // Step 3: Get list of professors (optionally filter by group members)
   info!("Step 3: Getting list of professors");
 
   // Option: Filter by group members (uncomment if needed)
-  // let group_members = get_group_members(&group_email_full, &admin_token).await?;
+  // let group_members = get_group_members(&group_email_full, &tsy).await?;
   // let professors = get_professors(abr, Some(group_members)).await?;
 
   // Or get all professors:
@@ -202,10 +201,9 @@ async fn movevideosmul() -> AppResult<()> {
 
     let results = stream::iter(chunk.iter())
       .map(|prof| async {
-        // Get impersonated token for this professor
-        // Note: You'll need to implement JWT token generation for impersonation
-        // For now, using admin token
-        let token = &admin_token;
+        // NOTE: Using tsy (admin token with subject) for all Drive API operations
+        // This token has domain-wide delegation and can access all users' files
+        let token = &tsy;
 
         // Find Meet Recordings folder
         match find_meet_recordings_folder(&prof.email, token).await {
@@ -259,12 +257,8 @@ async fn movevideosmul() -> AppResult<()> {
 
     let folder_name = format!("GRABS RESPALDO {}", prof.email);
 
-    match create_folder_in_shared_drive(
-      &folder_name,
-      &shared_drive_id,
-      &admin_token,
-    )
-    .await
+    match create_folder_in_shared_drive(&folder_name, &shared_drive_id, &tsy)
+      .await
     {
       Ok(folder_id) => {
         info!("Created folder '{}': {}", folder_name, folder_id);
@@ -278,8 +272,7 @@ async fn movevideosmul() -> AppResult<()> {
 
   // Step 6: Index the shared drive contents to verify folders
   info!("Step 6: Indexing shared drive contents");
-  let drive_items =
-    index_shared_drive_contents(&shared_drive_id, &admin_token).await?;
+  let drive_items = index_shared_drive_contents(&shared_drive_id, &tsy).await?;
   info!("Found {} items in shared drive", drive_items.len());
 
   // Step 7: Move videos to their respective professor folders
@@ -294,9 +287,9 @@ async fn movevideosmul() -> AppResult<()> {
 
       for video in videos {
         if let Some(ref current_parent) = video.parent_folder_id {
-          // Get impersonated token for moving files
-          // For now using admin token
-          let token = &admin_token;
+          // NOTE: Using tsy (admin token with subject) for moving files
+          // This token has domain-wide delegation to move files across users
+          let token = &tsy;
 
           match move_video_file(
             &video.id,
@@ -329,7 +322,7 @@ async fn movevideosmul() -> AppResult<()> {
 
   // Step 8: Remove the group permission
   info!("Step 8: Removing group permission from shared drive");
-  delete_group_permission(&shared_drive_id, &group_email_full, &admin_token)
+  delete_group_permission(&shared_drive_id, &group_email_full, &tsy)
     .await
     .cwl("Failed to remove group permission")?;
 

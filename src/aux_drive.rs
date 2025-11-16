@@ -90,13 +90,13 @@ fn ex_i64_val(rfin: &Value, path: &[&str]) -> Option<i64> {
 ///
 /// # Arguments
 /// * `group_email` - Email address of the group (e.g., "grabacionesmeet@domain.com")
-/// * `token` - Bearer token for authentication
+/// * `tsy` - Bearer token with subject for authentication (domain-wide delegation)
 ///
 /// # Returns
 /// Vector of email addresses
 pub async fn get_group_members(
   group_email: &str,
-  token: &str,
+  tsy: &str,
 ) -> AppResult<Vec<String>> {
   debug!("Getting members for group: {}", group_email);
 
@@ -117,7 +117,7 @@ pub async fn get_group_members(
       query["pageToken"] = json!(token_val);
     }
 
-    let au_build = req_build("GET", &url, Some(token), Some(&query), None)
+    let au_build = req_build("GET", &url, Some(tsy), Some(&query), None)
       .cwl("Failed to build request for group members")?;
 
     get_global_groups_list_limiter().until_ready().await;
@@ -219,13 +219,13 @@ pub async fn get_professors(
 ///
 /// # Arguments
 /// * `professor_email` - Email of the professor
-/// * `token` - Bearer token for the professor (impersonated)
+/// * `tsy` - Bearer token with subject for authentication (domain-wide delegation)
 ///
 /// # Returns
 /// Option containing MeetFolder if found
 pub async fn find_meet_recordings_folder(
   professor_email: &str,
-  token: &str,
+  tsy: &str,
 ) -> AppResult<Option<MeetFolder>> {
   debug!("Finding Meet Recordings folder for: {}", professor_email);
 
@@ -248,7 +248,7 @@ pub async fn find_meet_recordings_folder(
     }
 
     let url = Ep::Files.base_url();
-    let au_build = req_build("GET", url, Some(token), Some(&query), None)
+    let au_build = req_build("GET", url, Some(tsy), Some(&query), None)
       .cwl("Failed to build request for Meet Recordings folder")?;
 
     get_global_drive_limiter().until_ready().await;
@@ -304,15 +304,15 @@ pub async fn find_meet_recordings_folder(
 ///
 /// # Arguments
 /// * `folder_id` - ID of the folder containing videos
-/// * `owner_email` - Email of the folder owner (for token impersonation)
-/// * `token` - Bearer token
+/// * `owner_email` - Email of the folder owner (for reference)
+/// * `tsy` - Bearer token with subject for authentication (domain-wide delegation)
 ///
 /// # Returns
 /// Vector of VideoFile structs
 pub async fn get_videos_from_folder(
   folder_id: &str,
   owner_email: &str,
-  token: &str,
+  tsy: &str,
 ) -> AppResult<Vec<VideoFile>> {
   debug!("Getting videos from folder: {} for owner: {}", folder_id, owner_email);
 
@@ -336,7 +336,7 @@ pub async fn get_videos_from_folder(
     }
 
     let url = Ep::Files.base_url();
-    let au_build = req_build("GET", url, Some(token), Some(&query), None)
+    let au_build = req_build("GET", url, Some(tsy), Some(&query), None)
       .cwl("Failed to build request for video files")?;
 
     get_global_drive_limiter().until_ready().await;
@@ -402,13 +402,13 @@ pub async fn get_videos_from_folder(
 ///
 /// # Arguments
 /// * `name` - Name of the shared drive
-/// * `token` - Bearer token
+/// * `tsy` - Bearer token with subject for authentication (domain-wide delegation)
 ///
 /// # Returns
 /// ID of the created shared drive
 pub async fn create_shared_drive(
   name: &str,
-  token: &str,
+  tsy: &str,
 ) -> AppResult<String> {
   debug!("Creating shared drive: {}", name);
 
@@ -423,7 +423,7 @@ pub async fn create_shared_drive(
     "name": name
   });
 
-  let au_build = req_build("POST", url, Some(token), Some(&query), Some(&body))
+  let au_build = req_build("POST", url, Some(tsy), Some(&query), Some(&body))
     .cwl("Failed to build request for creating shared drive")?;
 
   get_global_drive_limiter().until_ready().await;
@@ -453,13 +453,13 @@ pub async fn create_shared_drive(
 ///
 /// # Arguments
 /// * `name` - Name of the shared drive to search for
-/// * `token` - Bearer token
+/// * `tsy` - Bearer token with subject for authentication (domain-wide delegation)
 ///
 /// # Returns
 /// Option containing the drive ID if found
 pub async fn find_shared_drive_by_name(
   name: &str,
-  token: &str,
+  tsy: &str,
 ) -> AppResult<Option<String>> {
   debug!("Searching for shared drive: {}", name);
 
@@ -476,7 +476,7 @@ pub async fn find_shared_drive_by_name(
     }
 
     let url = "https://www.googleapis.com/drive/v3/drives";
-    let au_build = req_build("GET", url, Some(token), Some(&query), None)
+    let au_build = req_build("GET", url, Some(tsy), Some(&query), None)
       .cwl("Failed to build request for finding shared drive")?;
 
     get_global_drive_limiter().until_ready().await;
@@ -527,14 +527,14 @@ pub async fn find_shared_drive_by_name(
 /// # Arguments
 /// * `folder_name` - Name of the folder to create
 /// * `parent_drive_id` - ID of the parent shared drive
-/// * `token` - Bearer token
+/// * `tsy` - Bearer token with subject for authentication (domain-wide delegation)
 ///
 /// # Returns
 /// ID of the created folder
 pub async fn create_folder_in_shared_drive(
   folder_name: &str,
   parent_drive_id: &str,
-  token: &str,
+  tsy: &str,
 ) -> AppResult<String> {
   debug!("Creating folder '{}' in shared drive: {}", folder_name, parent_drive_id);
 
@@ -550,7 +550,7 @@ pub async fn create_folder_in_shared_drive(
     "parents": [parent_drive_id]
   });
 
-  let au_build = req_build("POST", url, Some(token), Some(&query), Some(&body))
+  let au_build = req_build("POST", url, Some(tsy), Some(&query), Some(&body))
     .cwl("Failed to build request for creating folder in shared drive")?;
 
   get_global_drive_limiter().until_ready().await;
@@ -582,13 +582,13 @@ pub async fn create_folder_in_shared_drive(
 ///
 /// # Arguments
 /// * `file_id` - ID of the file/folder/drive
-/// * `token` - Bearer token
+/// * `tsy` - Bearer token with subject for authentication (domain-wide delegation)
 ///
 /// # Returns
 /// Vector of Permission structs
 pub async fn get_file_permissions(
   file_id: &str,
-  token: &str,
+  tsy: &str,
 ) -> AppResult<Vec<Permission>> {
   debug!("Getting permissions for file: {}", file_id);
 
@@ -599,7 +599,7 @@ pub async fn get_file_permissions(
     "fields": "permissions(id,emailAddress,role,type)"
   });
 
-  let au_build = req_build("GET", &url, Some(token), Some(&query), None)
+  let au_build = req_build("GET", &url, Some(tsy), Some(&query), None)
     .cwl("Failed to build request for getting file permissions")?;
 
   get_global_drive_limiter().until_ready().await;
@@ -646,12 +646,12 @@ pub async fn get_file_permissions(
 /// * `file_id` - ID of the file/folder/drive
 /// * `email` - Email address to grant permission to
 /// * `role` - Role to grant (reader, writer, commenter, etc.)
-/// * `token` - Bearer token
+/// * `tsy` - Bearer token with subject for authentication (domain-wide delegation)
 pub async fn add_permission_to_file(
   file_id: &str,
   email: &str,
   role: &str,
-  token: &str,
+  tsy: &str,
 ) -> AppResult<()> {
   debug!("Adding {} permission for {} to file: {}", role, email, file_id);
 
@@ -667,7 +667,7 @@ pub async fn add_permission_to_file(
     "emailAddress": email
   });
 
-  let au_build = req_build("POST", &url, Some(token), Some(&query), Some(&body))
+  let au_build = req_build("POST", &url, Some(tsy), Some(&query), Some(&body))
     .cwl("Failed to build request for adding permission")?;
 
   get_global_drive_limiter().until_ready().await;
@@ -692,11 +692,11 @@ pub async fn add_permission_to_file(
 /// # Arguments
 /// * `file_id` - ID of the file/folder/drive
 /// * `permission_id` - ID of the permission to delete
-/// * `token` - Bearer token
+/// * `tsy` - Bearer token with subject for authentication (domain-wide delegation)
 pub async fn delete_permission_from_file(
   file_id: &str,
   permission_id: &str,
-  token: &str,
+  tsy: &str,
 ) -> AppResult<()> {
   debug!("Deleting permission {} from file: {}", permission_id, file_id);
 
@@ -709,7 +709,7 @@ pub async fn delete_permission_from_file(
     "supportsAllDrives": "true"
   });
 
-  let au_build = req_build("DELETE", &url, Some(token), Some(&query), None)
+  let au_build = req_build("DELETE", &url, Some(tsy), Some(&query), None)
     .cwl("Failed to build request for deleting permission")?;
 
   get_global_delete_limiter().until_ready().await;
@@ -734,23 +734,23 @@ pub async fn delete_permission_from_file(
 /// # Arguments
 /// * `file_id` - ID of the file/folder/drive
 /// * `group_email` - Email of the group to remove
-/// * `token` - Bearer token
+/// * `tsy` - Bearer token with subject for authentication (domain-wide delegation)
 pub async fn delete_group_permission(
   file_id: &str,
   group_email: &str,
-  token: &str,
+  tsy: &str,
 ) -> AppResult<()> {
   debug!("Removing group permission for {} from file: {}", group_email, file_id);
 
   // First get all permissions
-  let permissions = get_file_permissions(file_id, token).await?;
+  let permissions = get_file_permissions(file_id, tsy).await?;
 
   // Find the permission matching the group email
   for perm in permissions {
     if let Some(ref email) = perm.email
       && email == group_email
     {
-      delete_permission_from_file(file_id, &perm.id, token).await?;
+      delete_permission_from_file(file_id, &perm.id, tsy).await?;
       return Ok(());
     }
   }
@@ -767,12 +767,12 @@ pub async fn delete_group_permission(
 /// * `file_id` - ID of the file to move
 /// * `current_parent_id` - Current parent folder ID
 /// * `new_parent_id` - New parent folder ID
-/// * `token` - Bearer token
+/// * `tsy` - Bearer token with subject for authentication (domain-wide delegation)
 pub async fn move_video_file(
   file_id: &str,
   current_parent_id: &str,
   new_parent_id: &str,
-  token: &str,
+  tsy: &str,
 ) -> AppResult<()> {
   debug!("Moving file {} from {} to {}", file_id, current_parent_id, new_parent_id);
 
@@ -784,7 +784,7 @@ pub async fn move_video_file(
     "supportsAllDrives": "true"
   });
 
-  let au_build = req_build("PATCH", &url, Some(token), Some(&query), None)
+  let au_build = req_build("PATCH", &url, Some(tsy), Some(&query), None)
     .cwl("Failed to build request for moving file")?;
 
   get_global_drive_limiter().until_ready().await;
@@ -810,13 +810,13 @@ pub async fn move_video_file(
 ///
 /// # Arguments
 /// * `drive_id` - ID of the shared drive
-/// * `token` - Bearer token
+/// * `tsy` - Bearer token with subject for authentication (domain-wide delegation)
 ///
 /// # Returns
 /// Vector of SharedDriveItem structs
 pub async fn index_shared_drive_contents(
   drive_id: &str,
-  token: &str,
+  tsy: &str,
 ) -> AppResult<Vec<SharedDriveItem>> {
   debug!("Indexing contents of shared drive: {}", drive_id);
 
@@ -839,7 +839,7 @@ pub async fn index_shared_drive_contents(
     }
 
     let url = Ep::Files.base_url();
-    let au_build = req_build("GET", url, Some(token), Some(&query), None)
+    let au_build = req_build("GET", url, Some(tsy), Some(&query), None)
       .cwl("Failed to build request for indexing shared drive")?;
 
     get_global_drive_limiter().until_ready().await;
