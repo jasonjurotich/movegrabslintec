@@ -27,7 +27,8 @@ use crate::sheets::count_db;
 use crate::tracer::ContextExt;
 use crate::{bail, debug, error, info, warn};
 use chrono::NaiveDate;
-use std::error::Error;
+// Commented out - was used in old error chain logic
+// use std::error::Error;
 use std::fmt::Debug;
 // use std::fmt::{Debug, DebugList};
 use std::sync::LazyLock;
@@ -686,14 +687,19 @@ pub async fn initdb() -> AppResult<()> {
   info!("Initializing database connection and setup...");
   dotenv().ok();
 
-  let db_endpoint = std::env::var("DB_ENDPOINT").unwrap_or_else(|_| {
-    // warn!("DB_ENDPOINT environment variable not set, using default 'ws://127.0.0.1:8000'.");
-    // "ws://127.0.0.1:8000".to_string() // WebSocket - works on Linux but has issues on macOS
-    warn!("DB_ENDPOINT environment variable not set, using default 'http://127.0.0.1:8000'.");
-    "http://127.0.0.1:8000".to_string() // HTTP - works on macOS for concurrent access testing
-    //  "surrealkv://./adminbot.db".to_string()); // Local surrealkv database for debugging
-    // let db_endpoint = "mem://".to_string() // for in memory
-    });
+  // ===== SIMPLIFIED IN-MEMORY MODE FOR CLOUD RUN =====
+  // Using in-memory database since this runs as an ephemeral Cloud Run function
+  let db_endpoint = "mem://";
+
+  // ===== OLD PERSISTENT DATABASE CODE (COMMENTED OUT FOR FUTURE USE) =====
+  // let db_endpoint = std::env::var("DB_ENDPOINT").unwrap_or_else(|_| {
+  //   // warn!("DB_ENDPOINT environment variable not set, using default 'ws://127.0.0.1:8000'.");
+  //   // "ws://127.0.0.1:8000".to_string() // WebSocket - works on Linux but has issues on macOS
+  //   warn!("DB_ENDPOINT environment variable not set, using default 'http://127.0.0.1:8000'.");
+  //   "http://127.0.0.1:8000".to_string() // HTTP - works on macOS for concurrent access testing
+  //   //  "surrealkv://./adminbot.db".to_string()); // Local surrealkv database for debugging
+  //   // let db_endpoint = "mem://".to_string() // for in memory
+  //   });
 
   let username = std::env::var("DB_USERNAME").unwrap_or_else(|_| {
     warn!(
@@ -702,88 +708,105 @@ pub async fn initdb() -> AppResult<()> {
     "surrealdbmain".to_string()
   });
 
-  let password = if cfg!(target_os = "macos") {
-    std::env::var("DB_PASSWORD").unwrap_or_else(|_| {
-      warn!("DB_PASSWORD environment variable not set, using default 'surrealdbupsap'.");
-      "surrealdbupsap".to_string()
-    })
-  } else {
-    std::env::var("DB_PASSWORD")
-      .cwl("DB_PASSWORD environment variable must be set in production")
-      .unwrap_or_else(|_| {
-        error!("DB_PASSWORD not set in production environment, this should come from Secret Manager");
-        panic!("DB_PASSWORD required in production");
-      })
-  };
+  // Simplified password handling for in-memory mode
+  let password = std::env::var("DB_PASSWORD").unwrap_or_else(|_| {
+    warn!("DB_PASSWORD environment variable not set, using default 'surrealdbupsap'.");
+    "surrealdbupsap".to_string()
+  });
+
+  // ===== OLD PRODUCTION PASSWORD LOGIC (COMMENTED OUT) =====
+  // let password = if cfg!(target_os = "macos") {
+  //   std::env::var("DB_PASSWORD").unwrap_or_else(|_| {
+  //     warn!("DB_PASSWORD environment variable not set, using default 'surrealdbupsap'.");
+  //     "surrealdbupsap".to_string()
+  //   })
+  // } else {
+  //   std::env::var("DB_PASSWORD")
+  //     .cwl("DB_PASSWORD environment variable must be set in production")
+  //     .unwrap_or_else(|_| {
+  //       error!("DB_PASSWORD not set in production environment, this should come from Secret Manager");
+  //       panic!("DB_PASSWORD required in production");
+  //     })
+  // };
 
   let namespace = std::env::var("DB_NS").unwrap_or_else(|_| {
-    warn!("DB_NS environment variable not set, using default 'test'.");
+    warn!("DB_NS environment variable not set, using default 'surrealns'.");
     "surrealns".to_string()
   });
 
   let database = std::env::var("DB_DB").unwrap_or_else(|_| {
-    warn!("DB_DB environment variable not set, using default 'test'.");
+    warn!("DB_DB environment variable not set, using default 'surrealkvdb'.");
     "surrealkvdb".to_string()
   });
 
-  let _is_production = !cfg!(target_os = "macos");
+  // Simplified connection for in-memory database
+  debug!(endpoint = %db_endpoint, "Connecting to in-memory SurrealDB...");
 
-  // Try multiple connection protocols to find one that works
-  let endpoints_to_try = vec![
-    db_endpoint.clone(),
-    db_endpoint.replace("ws://", "http://"),
-    db_endpoint
-      .replace("http://", "ws://")
-      .replace(":8000", ":8000/rpc"),
-    db_endpoint
-      .replace("http://", "wss://")
-      .replace(":8000", ":8000/rpc"),
-  ];
+  DB.connect(db_endpoint).await.cwl(&format!(
+    "Failed to connect to SurrealDB endpoint: {db_endpoint}"
+  ))?;
 
-  let mut last_error = None;
-  let mut connected = false;
-  let mut working_endpoint = String::new();
+  info!("Connected to in-memory SurrealDB successfully.");
 
-  for (idx, endpoint) in endpoints_to_try.iter().enumerate() {
-    info!(
-      attempt = idx + 1,
-      total = endpoints_to_try.len(),
-      endpoint = %endpoint,
-      "Attempting to connect to SurrealDB..."
-    );
-
-    match DB.connect(endpoint.as_str()).await {
-      Ok(_) => {
-        info!(endpoint = %endpoint, "Connection successful!");
-        working_endpoint = endpoint.clone();
-        connected = true;
-        break;
-      }
-      Err(e) => {
-        warn!(
-          endpoint = %endpoint,
-          error = %e,
-          "Connection attempt failed, trying next endpoint..."
-        );
-        last_error = Some(e);
-      }
-    }
-  }
-
-  if !connected {
-    error!(
-      endpoints_tried = ?endpoints_to_try,
-      last_error = ?last_error,
-      "Failed to connect to SurrealDB with any endpoint"
-    );
-    bail!(
-      "Failed to connect to SurrealDB. Tried {} endpoints. Last error: {:?}",
-      endpoints_to_try.len(),
-      last_error
-    );
-  }
-
-  info!(endpoint = %working_endpoint, "Connected to SurrealDB successfully.");
+  // ===== OLD MULTI-ENDPOINT FALLBACK LOGIC (COMMENTED OUT FOR FUTURE USE) =====
+  // let _is_production = !cfg!(target_os = "macos");
+  //
+  // // Try multiple connection protocols to find one that works
+  // let endpoints_to_try = vec![
+  //   db_endpoint.clone(),
+  //   db_endpoint.replace("ws://", "http://"),
+  //   db_endpoint
+  //     .replace("http://", "ws://")
+  //     .replace(":8000", ":8000/rpc"),
+  //   db_endpoint
+  //     .replace("http://", "wss://")
+  //     .replace(":8000", ":8000/rpc"),
+  // ];
+  //
+  // let mut last_error = None;
+  // let mut connected = false;
+  // let mut working_endpoint = String::new();
+  //
+  // for (idx, endpoint) in endpoints_to_try.iter().enumerate() {
+  //   info!(
+  //     attempt = idx + 1,
+  //     total = endpoints_to_try.len(),
+  //     endpoint = %endpoint,
+  //     "Attempting to connect to SurrealDB..."
+  //   );
+  //
+  //   match DB.connect(endpoint.as_str()).await {
+  //     Ok(_) => {
+  //       info!(endpoint = %endpoint, "Connection successful!");
+  //       working_endpoint = endpoint.clone();
+  //       connected = true;
+  //       break;
+  //     }
+  //     Err(e) => {
+  //       warn!(
+  //         endpoint = %endpoint,
+  //         error = %e,
+  //         "Connection attempt failed, trying next endpoint..."
+  //       );
+  //       last_error = Some(e);
+  //     }
+  //   }
+  // }
+  //
+  // if !connected {
+  //   error!(
+  //     endpoints_tried = ?endpoints_to_try,
+  //     last_error = ?last_error,
+  //     "Failed to connect to SurrealDB with any endpoint"
+  //   );
+  //   bail!(
+  //     "Failed to connect to SurrealDB. Tried {} endpoints. Last error: {:?}",
+  //     endpoints_to_try.len(),
+  //     last_error
+  //   );
+  // }
+  //
+  // info!(endpoint = %working_endpoint, "Connected to SurrealDB successfully.");
 
   // Select namespace and database BEFORE signin (required in SurrealDB 2.x)
   debug!(
@@ -802,11 +825,9 @@ pub async fn initdb() -> AppResult<()> {
     "Namespace and database selected successfully"
   );
 
-  // Now attempt signin with detailed error logging
+  // Attempt signin - for in-memory DB, this will auto-create the user if needed
   debug!(
     user = %username,
-    pass_len = password.len(),
-    endpoint = %working_endpoint,
     "Attempting signin with Root credentials..."
   );
 
@@ -817,51 +838,92 @@ pub async fn initdb() -> AppResult<()> {
     })
     .await
   {
-    Ok(response) => {
-      info!(
-        user = %username,
-        endpoint = %working_endpoint,
-        "ROOT signin successful!"
-      );
-      debug!(signin_response = ?response, "Signin response details");
+    Ok(_) => {
+      debug!(user = %username, "Signin successful.");
     }
     Err(e) => {
-      error!(
-        user = %username,
-        pass_len = password.len(),
-        endpoint = %working_endpoint,
-        error = %e,
-        error_debug = ?e,
-        error_source = ?e.source(),
-        "Signin failed - detailed error information"
+      warn!(user = %username, error = %e, "Initial signin failed. Attempting to define root user...");
+
+      let create_root = format!(
+        "DEFINE USER {username} ON ROOT PASSWORD '{password}' ROLES OWNER"
       );
 
-      // Print the full error chain
-      let mut current_error: Option<&dyn std::error::Error> = Some(&e);
-      let mut error_chain = Vec::new();
-      while let Some(err) = current_error {
-        error_chain.push(err.to_string());
-        current_error = err.source();
+      debug!(query = %create_root, "Executing define user query.");
+
+      match DB.query(create_root).await {
+        Ok(_) => {
+          debug!(user = %username, "Root user defined successfully. Attempting signin again...");
+
+          DB.signin(Root { username: &username, password: &password }).await.cwl(&format!(
+            "Failed to sign in as newly defined root user '{username}'"
+          ))?;
+
+          info!(user = %username, "Signin successful after user creation.");
+        }
+        Err(_define_err) => {
+          bail!(
+            "Failed to define root user '{username}': {_define_err}"
+          );
+        }
       }
-      error!(
-        error_chain = ?error_chain,
-        "Full error chain for signin failure"
-      );
-
-      bail!(
-        "Authentication failed with endpoint {}. Error chain: {:?}",
-        working_endpoint,
-        error_chain
-      );
     }
   }
 
-  DB.use_ns(&namespace)
-    .use_db(&database)
-    .await
-    .cwl("Failed to set SurrealDB namespace and database")?;
+  info!("Database initialization complete.");
 
-  info!("Namespace and database set successfully.");
+  // ===== OLD DETAILED SIGNIN LOGIC (COMMENTED OUT) =====
+  // match DB
+  //   .signin(Root {
+  //     username: &username,
+  //     password: &password,
+  //   })
+  //   .await
+  // {
+  //   Ok(response) => {
+  //     info!(
+  //       user = %username,
+  //       endpoint = %working_endpoint,
+  //       "ROOT signin successful!"
+  //     );
+  //     debug!(signin_response = ?response, "Signin response details");
+  //   }
+  //   Err(e) => {
+  //     error!(
+  //       user = %username,
+  //       pass_len = password.len(),
+  //       endpoint = %working_endpoint,
+  //       error = %e,
+  //       error_debug = ?e,
+  //       error_source = ?e.source(),
+  //       "Signin failed - detailed error information"
+  //     );
+  //
+  //     // Print the full error chain
+  //     let mut current_error: Option<&dyn std::error::Error> = Some(&e);
+  //     let mut error_chain = Vec::new();
+  //     while let Some(err) = current_error {
+  //       error_chain.push(err.to_string());
+  //       current_error = err.source();
+  //     }
+  //     error!(
+  //       error_chain = ?error_chain,
+  //       "Full error chain for signin failure"
+  //     );
+  //
+  //     bail!(
+  //       "Authentication failed with endpoint {}. Error chain: {:?}",
+  //       working_endpoint,
+  //       error_chain
+  //     );
+  //   }
+  // }
+  //
+  // DB.use_ns(&namespace)
+  //   .use_db(&database)
+  //   .await
+  //   .cwl("Failed to set SurrealDB namespace and database")?;
+  //
+  // info!("Namespace and database set successfully.");
 
   Ok(())
 }

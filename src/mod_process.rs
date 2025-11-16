@@ -119,6 +119,8 @@ async fn retry_with_fresh_token(
 }
 
 // Helper function to build query parameters for mt command with updateMask
+// Commented out - not currently used but may be needed for future functionality
+#[allow(dead_code)]
 fn build_mt_query_params(data: &serde_json::Map<String, Value>) -> Value {
   let mut query_obj = json!({
     "fields": "*",

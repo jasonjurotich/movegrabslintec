@@ -19,7 +19,8 @@ use aux_drive::*;
 use goauth::*;
 use tracer::*;
 
-use axum::{http::StatusCode, response::IntoResponse};
+// Commented out - may be needed for future Axum integration
+// use axum::{http::StatusCode, response::IntoResponse};
 
 use surrealstart::{
   EM, StaticEm, StaticFil, StaticKey, StaticPid, StaticSdir, initdb,
@@ -32,38 +33,39 @@ use std::{
 
 pub type AppResult<T, E = anyhow::Error> = std::result::Result<T, E>;
 
-fn format_error_chain(error: &anyhow::Error) -> String {
-  let mut chain = Vec::new();
-  chain.push(error.to_string());
+// Commented out - not currently used but may be needed for future Axum integration
+// fn format_error_chain(error: &anyhow::Error) -> String {
+//   let mut chain = Vec::new();
+//   chain.push(error.to_string());
 
-  let mut source = error.source();
-  while let Some(err) = source {
-    chain.push(err.to_string());
-    source = err.source();
-  }
+//   let mut source = error.source();
+//   while let Some(err) = source {
+//     chain.push(err.to_string());
+//     source = err.source();
+//   }
 
-  chain.join("\n↳ ")
-}
+//   chain.join("\n↳ ")
+// }
 
-struct AppError(anyhow::Error);
+// struct AppError(anyhow::Error);
 
-// Implement conversion from anyhow::Error to our AppError
-impl From<anyhow::Error> for AppError {
-  fn from(err: anyhow::Error) -> Self {
-    AppError(err)
-  }
-}
+// // Implement conversion from anyhow::Error to our AppError
+// impl From<anyhow::Error> for AppError {
+//   fn from(err: anyhow::Error) -> Self {
+//     AppError(err)
+//   }
+// }
 
-// Implement IntoResponse for our wrapper type
-impl IntoResponse for AppError {
-  fn into_response(self) -> axum::response::Response {
-    (
-      StatusCode::INTERNAL_SERVER_ERROR,
-      format!("Something went wrong: {}", self.0),
-    )
-      .into_response()
-  }
-}
+// // Implement IntoResponse for our wrapper type
+// impl IntoResponse for AppError {
+//   fn into_response(self) -> axum::response::Response {
+//     (
+//       StatusCode::INTERNAL_SERVER_ERROR,
+//       format!("Something went wrong: {}", self.0),
+//     )
+//       .into_response()
+//   }
+// }
 
 fn perform_health_check() -> bool {
   println!("Performing health check... status: OK.");
