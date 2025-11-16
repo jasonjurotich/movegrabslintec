@@ -196,16 +196,16 @@ pub async fn get_professors(
 
   let mut professors = Vec::new();
   for result in results {
-    if let Some(id) = ex_str_val(&result, &["id"]) {
-      if let Some(email) = ex_str_val(&result, &["email"]) {
-        professors.push(Professor {
-          id,
-          email,
-          full_name: ex_str_val(&result, &["full_name"]),
-          org_unit: ex_str_val(&result, &["org_unit"]),
-          suspended: result.get("suspended").and_then(|s| s.as_bool()),
-        });
-      }
+    if let Some(id) = ex_str_val(&result, &["id"])
+      && let Some(email) = ex_str_val(&result, &["email"])
+    {
+      professors.push(Professor {
+        id,
+        email,
+        full_name: ex_str_val(&result, &["full_name"]),
+        org_unit: ex_str_val(&result, &["org_unit"]),
+        suspended: result.get("suspended").and_then(|s| s.as_bool()),
+      });
     }
   }
 
@@ -260,22 +260,20 @@ pub async fn find_meet_recordings_folder(
         let rfin: Value = res.json().await.cwl("Failed to parse Meet Recordings response")?;
 
         // Check if we found any files
-        if let Some(files) = rfin.get("files").and_then(|f| f.as_array()) {
-          if !files.is_empty() {
-            if let Some(folder) = files.first() {
-              if let (Some(id), Some(name)) = (
-                ex_str_val(folder, &["id"]),
-                ex_str_val(folder, &["name"])
-              ) {
-                debug!("Found Meet Recordings folder: {} for {}", id, professor_email);
-                return Ok(Some(MeetFolder {
-                  id,
-                  name,
-                  owner_email: professor_email.to_string(),
-                }));
-              }
-            }
-          }
+        if let Some(files) = rfin.get("files").and_then(|f| f.as_array())
+          && !files.is_empty()
+          && let Some(folder) = files.first()
+          && let (Some(id), Some(name)) = (
+            ex_str_val(folder, &["id"]),
+            ex_str_val(folder, &["name"])
+          )
+        {
+          debug!("Found Meet Recordings folder: {} for {}", id, professor_email);
+          return Ok(Some(MeetFolder {
+            id,
+            name,
+            owner_email: professor_email.to_string(),
+          }));
         }
 
         // Check for next page
@@ -352,26 +350,26 @@ pub async fn get_videos_from_folder(
         // Extract files
         if let Some(files) = rfin.get("files").and_then(|f| f.as_array()) {
           for file in files {
-            if let Some(id) = ex_str_val(file, &["id"]) {
-              if let Some(name) = ex_str_val(file, &["name"]) {
-                let parent_id = file
-                  .get("parents")
-                  .and_then(|p| p.as_array())
-                  .and_then(|arr| arr.first())
-                  .and_then(|p| p.as_str())
-                  .map(|s| s.to_string());
+            if let Some(id) = ex_str_val(file, &["id"])
+              && let Some(name) = ex_str_val(file, &["name"])
+            {
+              let parent_id = file
+                .get("parents")
+                .and_then(|p| p.as_array())
+                .and_then(|arr| arr.first())
+                .and_then(|p| p.as_str())
+                .map(|s| s.to_string());
 
-                all_videos.push(VideoFile {
-                  id,
-                  name,
-                  mime_type: ex_str_val(file, &["mimeType"]).unwrap_or_else(|| "video/mp4".to_string()),
-                  created_time: ex_str_val(file, &["createdTime"]),
-                  owner_email: Some(owner_email.to_string()),
-                  size_bytes: ex_i64_val(file, &["size"]),
-                  parent_folder_id: parent_id,
-                  web_view_link: ex_str_val(file, &["webViewLink"]),
-                });
-              }
+              all_videos.push(VideoFile {
+                id,
+                name,
+                mime_type: ex_str_val(file, &["mimeType"]).unwrap_or_else(|| "video/mp4".to_string()),
+                created_time: ex_str_val(file, &["createdTime"]),
+                owner_email: Some(owner_email.to_string()),
+                size_bytes: ex_i64_val(file, &["size"]),
+                parent_folder_id: parent_id,
+                web_view_link: ex_str_val(file, &["webViewLink"]),
+              });
             }
           }
         }
@@ -492,13 +490,12 @@ pub async fn find_shared_drive_by_name(
         // Check if we found any drives
         if let Some(drives) = rfin.get("drives").and_then(|d| d.as_array()) {
           for drive in drives {
-            if let Some(drive_name) = ex_str_val(drive, &["name"]) {
-              if drive_name == name {
-                if let Some(id) = ex_str_val(drive, &["id"]) {
-                  debug!("Found shared drive '{}' with ID: {}", name, id);
-                  return Ok(Some(id));
-                }
-              }
+            if let Some(drive_name) = ex_str_val(drive, &["name"])
+              && drive_name == name
+              && let Some(id) = ex_str_val(drive, &["id"])
+            {
+              debug!("Found shared drive '{}' with ID: {}", name, id);
+              return Ok(Some(id));
             }
           }
         }
@@ -750,11 +747,11 @@ pub async fn delete_group_permission(
 
   // Find the permission matching the group email
   for perm in permissions {
-    if let Some(ref email) = perm.email {
-      if email == group_email {
-        delete_permission_from_file(file_id, &perm.id, token).await?;
-        return Ok(());
-      }
+    if let Some(ref email) = perm.email
+      && email == group_email
+    {
+      delete_permission_from_file(file_id, &perm.id, token).await?;
+      return Ok(());
     }
   }
 
