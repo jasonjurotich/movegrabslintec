@@ -18,12 +18,14 @@ mod tracer;
 use aux_drive::*;
 use goauth::*;
 use tracer::*;
+use lists::list_users;
+use limiters::get_global_drive_limiter;
 
 // Commented out - may be needed for future Axum integration
 // use axum::{http::StatusCode, response::IntoResponse};
 
 use surrealstart::{
-  EM, StaticEm, StaticFil, StaticKey, StaticPid, StaticSdir, initdb,
+  EM, Pets, StaticEm, StaticFil, StaticKey, StaticPid, StaticSdir, initdb,
 };
 
 use std::{
@@ -79,9 +81,9 @@ async fn run_app() -> AppResult<()> {
 
   StaticEm::set("jason.jurotich@ieducando.com");
   StaticKey::set("");
-  StaticPid::set("");
+  StaticPid::set("adminbot-iedu-prod");
   info!("This is em {:?}", &*EM);
-  StaticFil::set("avisosbot");
+  StaticFil::set("ieducandocom");
 
   let secrets_dir = env::var("DIR").unwrap_or_else(|_| {
     "/Users/jasonjurotich/Documents/RUSTDEV/JSONSECRETSAPI".to_string()

@@ -2,13 +2,16 @@
 
 use crate::AppResult;
 use crate::apis::Ep;
-use crate::error_utils::{parse_google_api_error};
-use crate::limiters::{get_global_drive_limiter, get_global_delete_limiter, get_global_groups_list_limiter};
-use crate::surrealstart::{req_build, DB};
+use crate::error_utils::parse_google_api_error;
+use crate::limiters::{
+  get_global_delete_limiter, get_global_drive_limiter,
+  get_global_groups_list_limiter,
+};
+use crate::surrealstart::{DB, req_build};
 use crate::tracer::ContextExt;
 use crate::{bail, debug};
-use serde_json::{Value, json};
 use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 
 // ==================== DATA STRUCTURES ====================
 
@@ -122,15 +125,25 @@ pub async fn get_group_members(
 
     get_global_groups_list_limiter().until_ready().await;
 
-    let res = au_build.send().await.cwl("Failed to send group members request")?;
+    let res = au_build
+      .send()
+      .await
+      .cwl("Failed to send group members request")?;
 
     match res.status().as_u16() {
       200..=299 => {
-        let rfin: Value = res.json().await.cwl("Failed to parse group members response")?;
+        let rfin: Value = res
+          .json()
+          .await
+          .cwl("Failed to parse group members response")?;
 
         // Extract members from response
         if let Some(members) = rfin.get("members").and_then(|m| m.as_array()) {
-          debug!("Processing {} members in current page for group: {}", members.len(), group_email);
+          debug!(
+            "Processing {} members in current page for group: {}",
+            members.len(),
+            group_email
+          );
           for member in members {
             if let Some(email) = member.get("email").and_then(|e| e.as_str()) {
               debug!("  - Found member: {}", email);
@@ -152,14 +165,25 @@ pub async fn get_group_members(
         }
       }
       status => {
-        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        let error_text = res
+          .text()
+          .await
+          .unwrap_or_else(|_| "Unknown error".to_string());
         let clean_error = parse_google_api_error(&error_text);
-        bail!("Failed to get group members - Status: {} - {}", status, clean_error);
+        bail!(
+          "Failed to get group members - Status: {} - {}",
+          status,
+          clean_error
+        );
       }
     }
   }
 
-  debug!("Found {} members in group {}", all_members.len(), group_email);
+  debug!(
+    "Found {} members in group {}",
+    all_members.len(),
+    group_email
+  );
   Ok(all_members)
 }
 
@@ -179,38 +203,64 @@ pub async fn get_professors(
 ) -> AppResult<Vec<Professor>> {
   debug!("Getting professors for abr: {}", abr);
 
-  let query = if let Some(emails) = filter_emails {
-    format!(
-      "SELECT * FROM usrs WHERE abr = '{}' AND id IS NOT NULL AND email IN {:?} ORDER BY email",
-      abr, emails
-    )
+  let (query, emails_bind) = if let Some(emails) = filter_emails {
+    let query = "
+      select * from type::table($table)
+      where abr = $abr
+        and data.id != none
+        and data.correo in $emails
+      order by data.correo
+    ";
+    (query, Some(emails))
   } else {
-    format!(
-      "SELECT * FROM usrs WHERE abr = '{}' AND id IS NOT NULL ORDER BY email",
-      abr
-    )
+    let query = "
+      select * from type::table($table)
+      where abr = $abr
+        and data.id != none
+      order by data.correo
+    ";
+    (query, None)
   };
 
-  let mut response = DB
-    .query(&query)
+  debug!("Executing query for professors with abr: {}", abr);
+
+  let mut query_builder = DB
+    .query(query)
+    .bind(("table", "usuarios"))
+    .bind(("abr", abr));
+
+  if let Some(emails) = emails_bind {
+    query_builder = query_builder.bind(("emails", emails));
+  }
+
+  let mut response = query_builder
     .await
     .cwl("Failed to query professors from database")?;
 
-  let results: Vec<Value> = response.take(0).cwl("Failed to extract professor results")?;
+  let results: Vec<Value> = response
+    .take(0)
+    .cwl("Failed to extract professor results")?;
 
   let mut professors = Vec::new();
   for result in results {
-    if let Some(id) = ex_str_val(&result, &["id"])
-      && let Some(email) = ex_str_val(&result, &["email"])
+    if let Some(id) = ex_str_val(&result, &["data", "id"])
+      && let Some(email) = ex_str_val(&result, &["data", "correo"])
     {
-      let full_name = ex_str_val(&result, &["full_name"]);
-      debug!("  - Found professor: {} ({})", email, full_name.as_deref().unwrap_or("No name"));
+      let full_name = ex_str_val(&result, &["data", "nombre_completo"]);
+      debug!(
+        "  - Found professor: {} ({})",
+        email,
+        full_name.as_deref().unwrap_or("No name")
+      );
       professors.push(Professor {
         id,
         email,
         full_name,
-        org_unit: ex_str_val(&result, &["org_unit"]),
-        suspended: result.get("suspended").and_then(|s| s.as_bool()),
+        org_unit: ex_str_val(&result, &["data", "org"]),
+        suspended: result
+          .get("data")
+          .and_then(|d| d.get("suspendido"))
+          .and_then(|s| s.as_bool()),
       });
     }
   }
@@ -259,23 +309,34 @@ pub async fn find_meet_recordings_folder(
 
     get_global_drive_limiter().until_ready().await;
 
-    let res = au_build.send().await.cwl("Failed to send Meet Recordings folder request")?;
+    let res = au_build
+      .send()
+      .await
+      .cwl("Failed to send Meet Recordings folder request")?;
 
     match res.status().as_u16() {
       200..=299 => {
-        let rfin: Value = res.json().await.cwl("Failed to parse Meet Recordings response")?;
+        let rfin: Value = res
+          .json()
+          .await
+          .cwl("Failed to parse Meet Recordings response")?;
 
         // Check if we found any files
         if let Some(files) = rfin.get("files").and_then(|f| f.as_array()) {
-          debug!("Found {} potential Meet Recordings folders for {}", files.len(), professor_email);
+          debug!(
+            "Found {} potential Meet Recordings folders for {}",
+            files.len(),
+            professor_email
+          );
           if !files.is_empty()
             && let Some(folder) = files.first()
-            && let (Some(id), Some(name)) = (
-              ex_str_val(folder, &["id"]),
-              ex_str_val(folder, &["name"])
-            )
+            && let (Some(id), Some(name)) =
+              (ex_str_val(folder, &["id"]), ex_str_val(folder, &["name"]))
           {
-            debug!("✓ Meet Recordings folder exists: {} (ID: {}) for {}", name, id, professor_email);
+            debug!(
+              "✓ Meet Recordings folder exists: {} (ID: {}) for {}",
+              name, id, professor_email
+            );
             return Ok(Some(MeetFolder {
               id,
               name,
@@ -295,13 +356,23 @@ pub async fn find_meet_recordings_folder(
         if page_token.is_none() {
           break;
         } else {
-          debug!("Checking next page for Meet Recordings folder for {}", professor_email);
+          debug!(
+            "Checking next page for Meet Recordings folder for {}",
+            professor_email
+          );
         }
       }
       status => {
-        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        let error_text = res
+          .text()
+          .await
+          .unwrap_or_else(|_| "Unknown error".to_string());
         let clean_error = parse_google_api_error(&error_text);
-        bail!("Failed to find Meet Recordings folder - Status: {} - {}", status, clean_error);
+        bail!(
+          "Failed to find Meet Recordings folder - Status: {} - {}",
+          status,
+          clean_error
+        );
       }
     }
   }
@@ -326,16 +397,17 @@ pub async fn get_videos_from_folder(
   owner_email: &str,
   tsy: &str,
 ) -> AppResult<Vec<VideoFile>> {
-  debug!("Getting videos from folder: {} for owner: {}", folder_id, owner_email);
+  debug!(
+    "Getting videos from folder: {} for owner: {}",
+    folder_id, owner_email
+  );
 
   let mut all_videos = Vec::new();
   let mut page_token: Option<String> = None;
 
   loop {
-    let query_str = format!(
-      "'{}' in parents and mimeType='video/mp4'",
-      folder_id
-    );
+    let query_str =
+      format!("'{}' in parents and mimeType='video/mp4'", folder_id);
 
     let mut query = json!({
       "q": query_str,
@@ -353,15 +425,26 @@ pub async fn get_videos_from_folder(
 
     get_global_drive_limiter().until_ready().await;
 
-    let res = au_build.send().await.cwl("Failed to send video files request")?;
+    let res = au_build
+      .send()
+      .await
+      .cwl("Failed to send video files request")?;
 
     match res.status().as_u16() {
       200..=299 => {
-        let rfin: Value = res.json().await.cwl("Failed to parse video files response")?;
+        let rfin: Value = res
+          .json()
+          .await
+          .cwl("Failed to parse video files response")?;
 
         // Extract files
         if let Some(files) = rfin.get("files").and_then(|f| f.as_array()) {
-          debug!("Found {} video files in current page for folder {} (owner: {})", files.len(), folder_id, owner_email);
+          debug!(
+            "Found {} video files in current page for folder {} (owner: {})",
+            files.len(),
+            folder_id,
+            owner_email
+          );
           for file in files {
             if let Some(id) = ex_str_val(file, &["id"])
               && let Some(name) = ex_str_val(file, &["name"])
@@ -376,8 +459,10 @@ pub async fn get_videos_from_folder(
               let size_bytes = ex_i64_val(file, &["size"]);
               let size_mb = size_bytes.map(|b| b as f64 / 1_048_576.0);
 
-              debug!("  - Video: {} (ID: {}, Size: {:.2} MB) - Owner: {}",
-                name, id,
+              debug!(
+                "  - Video: {} (ID: {}, Size: {:.2} MB) - Owner: {}",
+                name,
+                id,
                 size_mb.unwrap_or(0.0),
                 owner_email
               );
@@ -385,7 +470,8 @@ pub async fn get_videos_from_folder(
               all_videos.push(VideoFile {
                 id,
                 name,
-                mime_type: ex_str_val(file, &["mimeType"]).unwrap_or_else(|| "video/mp4".to_string()),
+                mime_type: ex_str_val(file, &["mimeType"])
+                  .unwrap_or_else(|| "video/mp4".to_string()),
                 created_time: ex_str_val(file, &["createdTime"]),
                 owner_email: Some(owner_email.to_string()),
                 size_bytes,
@@ -405,13 +491,23 @@ pub async fn get_videos_from_folder(
         if page_token.is_none() {
           break;
         } else {
-          debug!("Fetching next page of videos for folder {} (owner: {})", folder_id, owner_email);
+          debug!(
+            "Fetching next page of videos for folder {} (owner: {})",
+            folder_id, owner_email
+          );
         }
       }
       status => {
-        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        let error_text = res
+          .text()
+          .await
+          .unwrap_or_else(|_| "Unknown error".to_string());
         let clean_error = parse_google_api_error(&error_text);
-        bail!("Failed to get video files - Status: {} - {}", status, clean_error);
+        bail!(
+          "Failed to get video files - Status: {} - {}",
+          status,
+          clean_error
+        );
       }
     }
   }
@@ -430,14 +526,12 @@ pub async fn get_videos_from_folder(
 ///
 /// # Returns
 /// ID of the created shared drive
-pub async fn create_shared_drive(
-  name: &str,
-  tsy: &str,
-) -> AppResult<String> {
+pub async fn create_shared_drive(name: &str, tsy: &str) -> AppResult<String> {
   debug!("Creating shared drive: {}", name);
 
   let url = "https://www.googleapis.com/drive/v3/drives";
-  let request_id = format!("create-{}-{}", name, chrono::Utc::now().timestamp());
+  let request_id =
+    format!("create-{}-{}", name, chrono::Utc::now().timestamp());
 
   let query = json!({
     "requestId": request_id
@@ -452,11 +546,17 @@ pub async fn create_shared_drive(
 
   get_global_drive_limiter().until_ready().await;
 
-  let res = au_build.send().await.cwl("Failed to send create shared drive request")?;
+  let res = au_build
+    .send()
+    .await
+    .cwl("Failed to send create shared drive request")?;
 
   match res.status().as_u16() {
     200..=299 => {
-      let rfin: Value = res.json().await.cwl("Failed to parse create shared drive response")?;
+      let rfin: Value = res
+        .json()
+        .await
+        .cwl("Failed to parse create shared drive response")?;
 
       if let Some(id) = ex_str_val(&rfin, &["id"]) {
         debug!("Created shared drive with ID: {}", id);
@@ -466,9 +566,16 @@ pub async fn create_shared_drive(
       }
     }
     status => {
-      let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+      let error_text = res
+        .text()
+        .await
+        .unwrap_or_else(|_| "Unknown error".to_string());
       let clean_error = parse_google_api_error(&error_text);
-      bail!("Failed to create shared drive - Status: {} - {}", status, clean_error);
+      bail!(
+        "Failed to create shared drive - Status: {} - {}",
+        status,
+        clean_error
+      );
     }
   }
 }
@@ -505,11 +612,17 @@ pub async fn find_shared_drive_by_name(
 
     get_global_drive_limiter().until_ready().await;
 
-    let res = au_build.send().await.cwl("Failed to send find shared drive request")?;
+    let res = au_build
+      .send()
+      .await
+      .cwl("Failed to send find shared drive request")?;
 
     match res.status().as_u16() {
       200..=299 => {
-        let rfin: Value = res.json().await.cwl("Failed to parse find shared drive response")?;
+        let rfin: Value = res
+          .json()
+          .await
+          .cwl("Failed to parse find shared drive response")?;
 
         // Check if we found any drives
         if let Some(drives) = rfin.get("drives").and_then(|d| d.as_array()) {
@@ -535,9 +648,16 @@ pub async fn find_shared_drive_by_name(
         }
       }
       status => {
-        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        let error_text = res
+          .text()
+          .await
+          .unwrap_or_else(|_| "Unknown error".to_string());
         let clean_error = parse_google_api_error(&error_text);
-        bail!("Failed to find shared drive - Status: {} - {}", status, clean_error);
+        bail!(
+          "Failed to find shared drive - Status: {} - {}",
+          status,
+          clean_error
+        );
       }
     }
   }
@@ -560,7 +680,10 @@ pub async fn create_folder_in_shared_drive(
   parent_drive_id: &str,
   tsy: &str,
 ) -> AppResult<String> {
-  debug!("Creating folder '{}' in shared drive: {}", folder_name, parent_drive_id);
+  debug!(
+    "Creating folder '{}' in shared drive: {}",
+    folder_name, parent_drive_id
+  );
 
   let url = "https://www.googleapis.com/drive/v3/files";
 
@@ -574,16 +697,23 @@ pub async fn create_folder_in_shared_drive(
     "parents": [parent_drive_id]
   });
 
-  let au_build = req_build("POST", url, Some(tsy), Some(&query), Some(&body))
-    .cwl("Failed to build request for creating folder in shared drive")?;
+  let au_build =
+    req_build("POST", url, Some(tsy), Some(&query), Some(&body))
+      .cwl("Failed to build request for creating folder in shared drive")?;
 
   get_global_drive_limiter().until_ready().await;
 
-  let res = au_build.send().await.cwl("Failed to send create folder request")?;
+  let res = au_build
+    .send()
+    .await
+    .cwl("Failed to send create folder request")?;
 
   match res.status().as_u16() {
     200..=299 => {
-      let rfin: Value = res.json().await.cwl("Failed to parse create folder response")?;
+      let rfin: Value = res
+        .json()
+        .await
+        .cwl("Failed to parse create folder response")?;
 
       if let Some(id) = ex_str_val(&rfin, &["id"]) {
         debug!("Created folder '{}' with ID: {}", folder_name, id);
@@ -593,9 +723,16 @@ pub async fn create_folder_in_shared_drive(
       }
     }
     status => {
-      let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+      let error_text = res
+        .text()
+        .await
+        .unwrap_or_else(|_| "Unknown error".to_string());
       let clean_error = parse_google_api_error(&error_text);
-      bail!("Failed to create folder in shared drive - Status: {} - {}", status, clean_error);
+      bail!(
+        "Failed to create folder in shared drive - Status: {} - {}",
+        status,
+        clean_error
+      );
     }
   }
 }
@@ -616,7 +753,10 @@ pub async fn get_file_permissions(
 ) -> AppResult<Vec<Permission>> {
   debug!("Getting permissions for file: {}", file_id);
 
-  let url = format!("https://www.googleapis.com/drive/v3/files/{}/permissions", file_id);
+  let url = format!(
+    "https://www.googleapis.com/drive/v3/files/{}/permissions",
+    file_id
+  );
 
   let query = json!({
     "supportsAllDrives": "true",
@@ -628,11 +768,17 @@ pub async fn get_file_permissions(
 
   get_global_drive_limiter().until_ready().await;
 
-  let res = au_build.send().await.cwl("Failed to send get permissions request")?;
+  let res = au_build
+    .send()
+    .await
+    .cwl("Failed to send get permissions request")?;
 
   match res.status().as_u16() {
     200..=299 => {
-      let rfin: Value = res.json().await.cwl("Failed to parse get permissions response")?;
+      let rfin: Value = res
+        .json()
+        .await
+        .cwl("Failed to parse get permissions response")?;
 
       let mut permissions = Vec::new();
 
@@ -641,10 +787,11 @@ pub async fn get_file_permissions(
           if let (Some(id), Some(role), Some(perm_type)) = (
             ex_str_val(perm, &["id"]),
             ex_str_val(perm, &["role"]),
-            ex_str_val(perm, &["type"])
+            ex_str_val(perm, &["type"]),
           ) {
             let email = ex_str_val(perm, &["emailAddress"]);
-            debug!("  - Permission: {} ({}) - {} - File: {}",
+            debug!(
+              "  - Permission: {} ({}) - {} - File: {}",
               email.as_deref().unwrap_or("No email"),
               perm_type,
               role,
@@ -660,13 +807,24 @@ pub async fn get_file_permissions(
         }
       }
 
-      debug!("Found {} permissions for file {}", permissions.len(), file_id);
+      debug!(
+        "Found {} permissions for file {}",
+        permissions.len(),
+        file_id
+      );
       Ok(permissions)
     }
     status => {
-      let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+      let error_text = res
+        .text()
+        .await
+        .unwrap_or_else(|_| "Unknown error".to_string());
       let clean_error = parse_google_api_error(&error_text);
-      bail!("Failed to get file permissions - Status: {} - {}", status, clean_error);
+      bail!(
+        "Failed to get file permissions - Status: {} - {}",
+        status,
+        clean_error
+      );
     }
   }
 }
@@ -684,9 +842,15 @@ pub async fn add_permission_to_file(
   role: &str,
   tsy: &str,
 ) -> AppResult<()> {
-  debug!("Adding {} permission for {} to file: {}", role, email, file_id);
+  debug!(
+    "Adding {} permission for {} to file: {}",
+    role, email, file_id
+  );
 
-  let url = format!("https://www.googleapis.com/drive/v3/files/{}/permissions", file_id);
+  let url = format!(
+    "https://www.googleapis.com/drive/v3/files/{}/permissions",
+    file_id
+  );
 
   let query = json!({
     "supportsAllDrives": "true"
@@ -703,17 +867,33 @@ pub async fn add_permission_to_file(
 
   get_global_drive_limiter().until_ready().await;
 
-  let res = au_build.send().await.cwl("Failed to send add permission request")?;
+  let res = au_build
+    .send()
+    .await
+    .cwl("Failed to send add permission request")?;
 
   match res.status().as_u16() {
     200..=299 => {
-      debug!("✓ Successfully added {} permission for {} to file {}", role, email, file_id);
+      debug!(
+        "✓ Successfully added {} permission for {} to file {}",
+        role, email, file_id
+      );
       Ok(())
     }
     status => {
-      let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+      let error_text = res
+        .text()
+        .await
+        .unwrap_or_else(|_| "Unknown error".to_string());
       let clean_error = parse_google_api_error(&error_text);
-      bail!("Failed to add {} permission for {} to file {} - Status: {} - {}", role, email, file_id, status, clean_error);
+      bail!(
+        "Failed to add {} permission for {} to file {} - Status: {} - {}",
+        role,
+        email,
+        file_id,
+        status,
+        clean_error
+      );
     }
   }
 }
@@ -729,7 +909,10 @@ pub async fn delete_permission_from_file(
   permission_id: &str,
   tsy: &str,
 ) -> AppResult<()> {
-  debug!("Deleting permission {} from file: {}", permission_id, file_id);
+  debug!(
+    "Deleting permission {} from file: {}",
+    permission_id, file_id
+  );
 
   let url = format!(
     "https://www.googleapis.com/drive/v3/files/{}/permissions/{}",
@@ -745,17 +928,32 @@ pub async fn delete_permission_from_file(
 
   get_global_delete_limiter().until_ready().await;
 
-  let res = au_build.send().await.cwl("Failed to send delete permission request")?;
+  let res = au_build
+    .send()
+    .await
+    .cwl("Failed to send delete permission request")?;
 
   match res.status().as_u16() {
     200..=299 => {
-      debug!("✓ Successfully deleted permission {} from file {}", permission_id, file_id);
+      debug!(
+        "✓ Successfully deleted permission {} from file {}",
+        permission_id, file_id
+      );
       Ok(())
     }
     status => {
-      let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+      let error_text = res
+        .text()
+        .await
+        .unwrap_or_else(|_| "Unknown error".to_string());
       let clean_error = parse_google_api_error(&error_text);
-      bail!("Failed to delete permission {} from file {} - Status: {} - {}", permission_id, file_id, status, clean_error);
+      bail!(
+        "Failed to delete permission {} from file {} - Status: {} - {}",
+        permission_id,
+        file_id,
+        status,
+        clean_error
+      );
     }
   }
 }
@@ -771,7 +969,10 @@ pub async fn delete_group_permission(
   group_email: &str,
   tsy: &str,
 ) -> AppResult<()> {
-  debug!("Removing group permission for {} from file: {}", group_email, file_id);
+  debug!(
+    "Removing group permission for {} from file: {}",
+    group_email, file_id
+  );
 
   // First get all permissions
   let permissions = get_file_permissions(file_id, tsy).await?;
@@ -781,14 +982,23 @@ pub async fn delete_group_permission(
     if let Some(ref email) = perm.email
       && email == group_email
     {
-      debug!("Found matching group permission for {} on file {}, deleting...", group_email, file_id);
+      debug!(
+        "Found matching group permission for {} on file {}, deleting...",
+        group_email, file_id
+      );
       delete_permission_from_file(file_id, &perm.id, tsy).await?;
-      debug!("✓ Successfully removed group permission for {} from file {}", group_email, file_id);
+      debug!(
+        "✓ Successfully removed group permission for {} from file {}",
+        group_email, file_id
+      );
       return Ok(());
     }
   }
 
-  debug!("No permission found for group {} on file {} (already removed or never existed)", group_email, file_id);
+  debug!(
+    "No permission found for group {} on file {} (already removed or never existed)",
+    group_email, file_id
+  );
   Ok(())
 }
 
@@ -807,7 +1017,10 @@ pub async fn move_video_file(
   new_parent_id: &str,
   tsy: &str,
 ) -> AppResult<()> {
-  debug!("Moving file {} from {} to {}", file_id, current_parent_id, new_parent_id);
+  debug!(
+    "Moving file {} from {} to {}",
+    file_id, current_parent_id, new_parent_id
+  );
 
   let url = format!("https://www.googleapis.com/drive/v3/files/{}", file_id);
 
@@ -822,17 +1035,33 @@ pub async fn move_video_file(
 
   get_global_drive_limiter().until_ready().await;
 
-  let res = au_build.send().await.cwl("Failed to send move file request")?;
+  let res = au_build
+    .send()
+    .await
+    .cwl("Failed to send move file request")?;
 
   match res.status().as_u16() {
     200..=299 => {
-      debug!("✓ Successfully moved file {} from folder {} to folder {}", file_id, current_parent_id, new_parent_id);
+      debug!(
+        "✓ Successfully moved file {} from folder {} to folder {}",
+        file_id, current_parent_id, new_parent_id
+      );
       Ok(())
     }
     status => {
-      let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+      let error_text = res
+        .text()
+        .await
+        .unwrap_or_else(|_| "Unknown error".to_string());
       let clean_error = parse_google_api_error(&error_text);
-      bail!("Failed to move file {} from {} to {} - Status: {} - {}", file_id, current_parent_id, new_parent_id, status, clean_error);
+      bail!(
+        "Failed to move file {} from {} to {} - Status: {} - {}",
+        file_id,
+        current_parent_id,
+        new_parent_id,
+        status,
+        clean_error
+      );
     }
   }
 }
@@ -877,20 +1106,30 @@ pub async fn index_shared_drive_contents(
 
     get_global_drive_limiter().until_ready().await;
 
-    let res = au_build.send().await.cwl("Failed to send index shared drive request")?;
+    let res = au_build
+      .send()
+      .await
+      .cwl("Failed to send index shared drive request")?;
 
     match res.status().as_u16() {
       200..=299 => {
-        let rfin: Value = res.json().await.cwl("Failed to parse index shared drive response")?;
+        let rfin: Value = res
+          .json()
+          .await
+          .cwl("Failed to parse index shared drive response")?;
 
         // Extract files
         if let Some(files) = rfin.get("files").and_then(|f| f.as_array()) {
-          debug!("Found {} items in current page for shared drive {}", files.len(), drive_id);
+          debug!(
+            "Found {} items in current page for shared drive {}",
+            files.len(),
+            drive_id
+          );
           for file in files {
             if let (Some(id), Some(name), Some(mime_type)) = (
               ex_str_val(file, &["id"]),
               ex_str_val(file, &["name"]),
-              ex_str_val(file, &["mimeType"])
+              ex_str_val(file, &["mimeType"]),
             ) {
               let parent_id = file
                 .get("parents")
@@ -899,8 +1138,15 @@ pub async fn index_shared_drive_contents(
                 .and_then(|p| p.as_str())
                 .map(|s| s.to_string());
 
-              let item_type = if mime_type.contains("folder") { "Folder" } else { "File" };
-              debug!("  - {}: {} (ID: {}, Type: {})", item_type, name, id, mime_type);
+              let item_type = if mime_type.contains("folder") {
+                "Folder"
+              } else {
+                "File"
+              };
+              debug!(
+                "  - {}: {} (ID: {}, Type: {})",
+                item_type, name, id, mime_type
+              );
 
               all_items.push(SharedDriveItem {
                 id,
@@ -928,13 +1174,24 @@ pub async fn index_shared_drive_contents(
         }
       }
       status => {
-        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        let error_text = res
+          .text()
+          .await
+          .unwrap_or_else(|_| "Unknown error".to_string());
         let clean_error = parse_google_api_error(&error_text);
-        bail!("Failed to index shared drive - Status: {} - {}", status, clean_error);
+        bail!(
+          "Failed to index shared drive - Status: {} - {}",
+          status,
+          clean_error
+        );
       }
     }
   }
 
-  debug!("Found {} items in shared drive {}", all_items.len(), drive_id);
+  debug!(
+    "Found {} items in shared drive {}",
+    all_items.len(),
+    drive_id
+  );
   Ok(all_items)
 }

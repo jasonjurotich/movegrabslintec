@@ -776,6 +776,8 @@ pub async fn get_secret_json(usr: String) -> AppResult<Value> {
   debug!("=== GOOGLE SECRETS MANAGER RESPONSE ===");
   debug!("Status: {}", check_res.status());
   debug!("Status code: {}", check_res.status().as_u16());
+  debug!("URL checked: {}", url);
+  debug!("Secret name being checked: {}", filename);
 
   let secret_exists_in_cloud = check_res.status().as_u16() == 200;
 
@@ -784,6 +786,10 @@ pub async fn get_secret_json(usr: String) -> AppResult<Value> {
     "secret_exists_in_cloud: {} for {filename}",
     secret_exists_in_cloud
   );
+
+  if !secret_exists_in_cloud {
+    debug!("Secret NOT found in initial check, status was: {}", check_res.status().as_u16());
+  }
 
   if secret_exists_in_cloud {
     debug!(filename = %filename, "Secret for found in Google Secrets Manager, proceeding directly to cloud retrieval");
