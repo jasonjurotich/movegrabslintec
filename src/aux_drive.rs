@@ -247,6 +247,28 @@ pub async fn get_professors(
     (query, None)
   };
 
+  // Debug: Check what org values exist in the database
+  let debug_org_query = "select value data.org from type::table($table) where abr = $abr and data.org != none limit 10";
+  let mut debug_org_response = DB
+    .query(debug_org_query)
+    .bind(("table", "usuarios".to_string()))
+    .bind(("abr", abr.to_string()))
+    .await
+    .cwl("Failed to query sample org values")?;
+  let sample_orgs: Vec<String> = debug_org_response.take(0).unwrap_or_default();
+  debug!("Sample org values in database: {:?}", sample_orgs);
+
+  // Debug: Count users by org containing "PROFESORES"
+  let debug_count_query = "select count() from type::table($table) where abr = $abr and string::contains(string::lowercase(data.org), 'profesores') group all";
+  let mut debug_count_response = DB
+    .query(debug_count_query)
+    .bind(("table", "usuarios".to_string()))
+    .bind(("abr", abr.to_string()))
+    .await
+    .cwl("Failed to count profesores")?;
+  let prof_count: Vec<Value> = debug_count_response.take(0).unwrap_or_default();
+  debug!("Users with 'profesores' in org: {:?}", prof_count);
+
   debug!("Executing query for professors with abr: {} and org: {}", abr, org_path);
 
   let mut query_builder = DB
