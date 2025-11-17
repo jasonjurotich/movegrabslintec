@@ -193,21 +193,24 @@ pub async fn get_group_members(
 ///
 /// # Arguments
 /// * `abr` - Database abbreviation (e.g., "linguatec")
+/// * `org_path` - Organization path to filter by (e.g., "/COLABORADORES/PROFESORES")
 /// * `filter_emails` - Optional list of emails to filter by
 ///
 /// # Returns
 /// Vector of Professor structs
 pub async fn get_professors(
   abr: &str,
+  org_path: &str,
   filter_emails: Option<Vec<String>>,
 ) -> AppResult<Vec<Professor>> {
-  debug!("Getting professors for abr: {}", abr);
+  debug!("Getting professors for abr: {} with org path: {}", abr, org_path);
 
   let (query, emails_bind) = if let Some(emails) = filter_emails {
     let query = "
       select * from type::table($table)
       where abr = $abr
         and data.id != none
+        and data.org = $org_path
         and data.correo in $emails
       order by data.correo
     ";
@@ -217,17 +220,19 @@ pub async fn get_professors(
       select * from type::table($table)
       where abr = $abr
         and data.id != none
+        and data.org = $org_path
       order by data.correo
     ";
     (query, None)
   };
 
-  debug!("Executing query for professors with abr: {}", abr);
+  debug!("Executing query for professors with abr: {} and org: {}", abr, org_path);
 
   let mut query_builder = DB
     .query(query)
     .bind(("table", "usuarios"))
-    .bind(("abr", abr));
+    .bind(("abr", abr))
+    .bind(("org_path", org_path));
 
   if let Some(emails) = emails_bind {
     query_builder = query_builder.bind(("emails", emails));

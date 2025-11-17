@@ -172,16 +172,39 @@ async fn movevideosmul() -> AppResult<()> {
     .await
     .cwl("Failed to add group permission")?;
 
-  // Step 3: Get list of professors (optionally filter by group members)
-  info!("Step 3: Getting list of professors");
+  // Step 3: Populate database with users from Google Workspace
+  info!("Step 3: Populating database with users from Google Workspace");
+
+  let pets = Pets {
+    tsn: String::new(),           // Not needed for this operation
+    tsy: tsy.clone(),
+    sp: String::new(),            // Not needed
+    cmd: String::new(),           // Not needed
+    abr: abr.to_string(),
+    spshid: String::new(),        // Not needed for list_users
+    dom: domain.to_string(),
+    params: String::new(),        // Not needed
+  };
+
+  let limiter = get_global_drive_limiter();
+  list_users(limiter, &pets)
+    .await
+    .cwl("Failed to list users from Google Workspace")?;
+
+  info!("Successfully populated database with users");
+
+  // Step 4: Get list of professors from /COLABORADORES/PROFESORES org
+  info!("Step 4: Getting list of professors from database");
+
+  let org_path = "/COLABORADORES/PROFESORES";
 
   // Option: Filter by group members (uncomment if needed)
   // let group_members = get_group_members(&group_email_full, &tsy).await?;
-  // let professors = get_professors(abr, Some(group_members)).await?;
+  // let professors = get_professors(abr, org_path, Some(group_members)).await?;
 
-  // Or get all professors:
-  let professors = get_professors(abr, None).await?;
-  info!("Found {} professors", professors.len());
+  // Or get all professors from the org:
+  let professors = get_professors(abr, org_path, None).await?;
+  info!("Found {} professors in {}", professors.len(), org_path);
 
   // Step 4: For each professor, find their Meet Recordings folder and get videos
   info!("Step 4: Finding Meet Recordings folders and collecting videos");
