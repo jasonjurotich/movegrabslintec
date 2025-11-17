@@ -130,8 +130,10 @@ pub async fn get_group_members(
 
         // Extract members from response
         if let Some(members) = rfin.get("members").and_then(|m| m.as_array()) {
+          debug!("Processing {} members in current page for group: {}", members.len(), group_email);
           for member in members {
             if let Some(email) = member.get("email").and_then(|e| e.as_str()) {
+              debug!("  - Found member: {}", email);
               all_members.push(email.to_string());
             }
           }
@@ -145,6 +147,8 @@ pub async fn get_group_members(
 
         if page_token.is_none() {
           break;
+        } else {
+          debug!("Fetching next page of members for group: {}", group_email);
         }
       }
       status => {
@@ -199,17 +203,19 @@ pub async fn get_professors(
     if let Some(id) = ex_str_val(&result, &["id"])
       && let Some(email) = ex_str_val(&result, &["email"])
     {
+      let full_name = ex_str_val(&result, &["full_name"]);
+      debug!("  - Found professor: {} ({})", email, full_name.as_deref().unwrap_or("No name"));
       professors.push(Professor {
         id,
         email,
-        full_name: ex_str_val(&result, &["full_name"]),
+        full_name,
         org_unit: ex_str_val(&result, &["org_unit"]),
         suspended: result.get("suspended").and_then(|s| s.as_bool()),
       });
     }
   }
 
-  debug!("Found {} professors", professors.len());
+  debug!("Found {} professors for abr: {}", professors.len(), abr);
   Ok(professors)
 }
 
@@ -260,20 +266,24 @@ pub async fn find_meet_recordings_folder(
         let rfin: Value = res.json().await.cwl("Failed to parse Meet Recordings response")?;
 
         // Check if we found any files
-        if let Some(files) = rfin.get("files").and_then(|f| f.as_array())
-          && !files.is_empty()
-          && let Some(folder) = files.first()
-          && let (Some(id), Some(name)) = (
-            ex_str_val(folder, &["id"]),
-            ex_str_val(folder, &["name"])
-          )
-        {
-          debug!("Found Meet Recordings folder: {} for {}", id, professor_email);
-          return Ok(Some(MeetFolder {
-            id,
-            name,
-            owner_email: professor_email.to_string(),
-          }));
+        if let Some(files) = rfin.get("files").and_then(|f| f.as_array()) {
+          debug!("Found {} potential Meet Recordings folders for {}", files.len(), professor_email);
+          if !files.is_empty()
+            && let Some(folder) = files.first()
+            && let (Some(id), Some(name)) = (
+              ex_str_val(folder, &["id"]),
+              ex_str_val(folder, &["name"])
+            )
+          {
+            debug!("✓ Meet Recordings folder exists: {} (ID: {}) for {}", name, id, professor_email);
+            return Ok(Some(MeetFolder {
+              id,
+              name,
+              owner_email: professor_email.to_string(),
+            }));
+          }
+        } else {
+          debug!("No folders found in this page for {}", professor_email);
         }
 
         // Check for next page
@@ -284,6 +294,8 @@ pub async fn find_meet_recordings_folder(
 
         if page_token.is_none() {
           break;
+        } else {
+          debug!("Checking next page for Meet Recordings folder for {}", professor_email);
         }
       }
       status => {
@@ -349,6 +361,7 @@ pub async fn get_videos_from_folder(
 
         // Extract files
         if let Some(files) = rfin.get("files").and_then(|f| f.as_array()) {
+          debug!("Found {} video files in current page for folder {} (owner: {})", files.len(), folder_id, owner_email);
           for file in files {
             if let Some(id) = ex_str_val(file, &["id"])
               && let Some(name) = ex_str_val(file, &["name"])
@@ -360,13 +373,22 @@ pub async fn get_videos_from_folder(
                 .and_then(|p| p.as_str())
                 .map(|s| s.to_string());
 
+              let size_bytes = ex_i64_val(file, &["size"]);
+              let size_mb = size_bytes.map(|b| b as f64 / 1_048_576.0);
+
+              debug!("  - Video: {} (ID: {}, Size: {:.2} MB) - Owner: {}",
+                name, id,
+                size_mb.unwrap_or(0.0),
+                owner_email
+              );
+
               all_videos.push(VideoFile {
                 id,
                 name,
                 mime_type: ex_str_val(file, &["mimeType"]).unwrap_or_else(|| "video/mp4".to_string()),
                 created_time: ex_str_val(file, &["createdTime"]),
                 owner_email: Some(owner_email.to_string()),
-                size_bytes: ex_i64_val(file, &["size"]),
+                size_bytes,
                 parent_folder_id: parent_id,
                 web_view_link: ex_str_val(file, &["webViewLink"]),
               });
@@ -382,6 +404,8 @@ pub async fn get_videos_from_folder(
 
         if page_token.is_none() {
           break;
+        } else {
+          debug!("Fetching next page of videos for folder {} (owner: {})", folder_id, owner_email);
         }
       }
       status => {
@@ -619,9 +643,16 @@ pub async fn get_file_permissions(
             ex_str_val(perm, &["role"]),
             ex_str_val(perm, &["type"])
           ) {
+            let email = ex_str_val(perm, &["emailAddress"]);
+            debug!("  - Permission: {} ({}) - {} - File: {}",
+              email.as_deref().unwrap_or("No email"),
+              perm_type,
+              role,
+              file_id
+            );
             permissions.push(Permission {
               id,
-              email: ex_str_val(perm, &["emailAddress"]),
+              email,
               role,
               perm_type,
             });
@@ -676,13 +707,13 @@ pub async fn add_permission_to_file(
 
   match res.status().as_u16() {
     200..=299 => {
-      debug!("Successfully added permission for {} to file {}", email, file_id);
+      debug!("✓ Successfully added {} permission for {} to file {}", role, email, file_id);
       Ok(())
     }
     status => {
       let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
       let clean_error = parse_google_api_error(&error_text);
-      bail!("Failed to add permission - Status: {} - {}", status, clean_error);
+      bail!("Failed to add {} permission for {} to file {} - Status: {} - {}", role, email, file_id, status, clean_error);
     }
   }
 }
@@ -718,13 +749,13 @@ pub async fn delete_permission_from_file(
 
   match res.status().as_u16() {
     200..=299 => {
-      debug!("Successfully deleted permission {} from file {}", permission_id, file_id);
+      debug!("✓ Successfully deleted permission {} from file {}", permission_id, file_id);
       Ok(())
     }
     status => {
       let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
       let clean_error = parse_google_api_error(&error_text);
-      bail!("Failed to delete permission - Status: {} - {}", status, clean_error);
+      bail!("Failed to delete permission {} from file {} - Status: {} - {}", permission_id, file_id, status, clean_error);
     }
   }
 }
@@ -750,12 +781,14 @@ pub async fn delete_group_permission(
     if let Some(ref email) = perm.email
       && email == group_email
     {
+      debug!("Found matching group permission for {} on file {}, deleting...", group_email, file_id);
       delete_permission_from_file(file_id, &perm.id, tsy).await?;
+      debug!("✓ Successfully removed group permission for {} from file {}", group_email, file_id);
       return Ok(());
     }
   }
 
-  debug!("No permission found for group {} on file {}", group_email, file_id);
+  debug!("No permission found for group {} on file {} (already removed or never existed)", group_email, file_id);
   Ok(())
 }
 
@@ -793,13 +826,13 @@ pub async fn move_video_file(
 
   match res.status().as_u16() {
     200..=299 => {
-      debug!("Successfully moved file {}", file_id);
+      debug!("✓ Successfully moved file {} from folder {} to folder {}", file_id, current_parent_id, new_parent_id);
       Ok(())
     }
     status => {
       let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
       let clean_error = parse_google_api_error(&error_text);
-      bail!("Failed to move file - Status: {} - {}", status, clean_error);
+      bail!("Failed to move file {} from {} to {} - Status: {} - {}", file_id, current_parent_id, new_parent_id, status, clean_error);
     }
   }
 }
@@ -852,6 +885,7 @@ pub async fn index_shared_drive_contents(
 
         // Extract files
         if let Some(files) = rfin.get("files").and_then(|f| f.as_array()) {
+          debug!("Found {} items in current page for shared drive {}", files.len(), drive_id);
           for file in files {
             if let (Some(id), Some(name), Some(mime_type)) = (
               ex_str_val(file, &["id"]),
@@ -864,6 +898,9 @@ pub async fn index_shared_drive_contents(
                 .and_then(|arr| arr.first())
                 .and_then(|p| p.as_str())
                 .map(|s| s.to_string());
+
+              let item_type = if mime_type.contains("folder") { "Folder" } else { "File" };
+              debug!("  - {}: {} (ID: {}, Type: {})", item_type, name, id, mime_type);
 
               all_items.push(SharedDriveItem {
                 id,
@@ -886,6 +923,8 @@ pub async fn index_shared_drive_contents(
 
         if page_token.is_none() {
           break;
+        } else {
+          debug!("Fetching next page of items for shared drive {}", drive_id);
         }
       }
       status => {
