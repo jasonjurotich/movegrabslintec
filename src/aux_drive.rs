@@ -205,6 +205,27 @@ pub async fn get_professors(
 ) -> AppResult<Vec<Professor>> {
   debug!("Getting professors for abr: {} with org path: {}", abr, org_path);
 
+  // Debug: Check if data is in gusuarios instead of usuarios (abr = "lintec")
+  let debug_query1 = "select count() from type::table($table) where abr = $abr group all";
+  let mut debug_response1 = DB
+    .query(debug_query1)
+    .bind(("table", "gusuarios".to_string()))
+    .bind(("abr", abr.to_string()))
+    .await
+    .cwl("Failed to count gusuarios")?;
+  let gusuarios_count: Vec<Value> = debug_response1.take(0).unwrap_or_default();
+
+  let debug_query2 = "select count() from type::table($table) where abr = $abr group all";
+  let mut debug_response2 = DB
+    .query(debug_query2)
+    .bind(("table", "usuarios".to_string()))
+    .bind(("abr", abr.to_string()))
+    .await
+    .cwl("Failed to count usuarios")?;
+  let usuarios_count: Vec<Value> = debug_response2.take(0).unwrap_or_default();
+
+  debug!("DEBUG: gusuarios count: {:?}, usuarios count: {:?} (abr={})", gusuarios_count, usuarios_count, abr);
+
   let (query, emails_bind) = if let Some(emails) = filter_emails {
     let query = "
       select * from type::table($table)
@@ -230,9 +251,9 @@ pub async fn get_professors(
 
   let mut query_builder = DB
     .query(query)
-    .bind(("table", "usuarios"))
-    .bind(("abr", abr))
-    .bind(("org_path", org_path));
+    .bind(("table", "usuarios".to_string()))
+    .bind(("abr", abr.to_string()))
+    .bind(("org_path", org_path.to_string()));
 
   if let Some(emails) = emails_bind {
     query_builder = query_builder.bind(("emails", emails));

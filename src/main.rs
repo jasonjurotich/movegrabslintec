@@ -19,13 +19,15 @@ use aux_drive::*;
 use goauth::*;
 use tracer::*;
 use lists::list_users;
-use limiters::get_global_drive_limiter;
+use limiters::create_rate_limiter;
+use apis::Ep;
 
 // Commented out - may be needed for future Axum integration
 // use axum::{http::StatusCode, response::IntoResponse};
 
 use surrealstart::{
   EM, Pets, StaticEm, StaticFil, StaticKey, StaticPid, StaticSdir, initdb,
+  gdatabase_to_sheetsdb,
 };
 
 use std::{
@@ -181,17 +183,24 @@ async fn movevideosmul() -> AppResult<()> {
     sp: String::new(),            // Not needed
     cmd: String::new(),           // Not needed
     abr: abr.to_string(),
-    spshid: String::new(),        // Not needed for list_users
+    spshid: "1lOar2kxcKQVyQhQX5_fOPgUOe1dWtZO60O_ZHOKApgA".to_string(),
     dom: domain.to_string(),
     params: String::new(),        // Not needed
   };
 
-  let limiter = get_global_drive_limiter();
+  let limiter = create_rate_limiter(100); // 100 requests per second
   list_users(limiter, &pets)
     .await
     .cwl("Failed to list users from Google Workspace")?;
 
-  info!("Successfully populated database with users");
+  info!("Successfully populated database with users (in gusuarios table)");
+
+  // Step 3.5: Transform data from gusuarios to usuarios
+  info!("Step 3.5: Transforming user data from gusuarios to usuarios");
+  gdatabase_to_sheetsdb(abr.to_string(), Ep::Users)
+    .await
+    .cwl("Failed to transform user data from gusuarios to usuarios")?;
+  info!("Successfully transformed user data to usuarios table");
 
   // Step 4: Get list of professors from /COLABORADORES/PROFESORES org
   info!("Step 4: Getting list of professors from database");
