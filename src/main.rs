@@ -15,19 +15,19 @@ mod sheets;
 mod surrealstart;
 mod tracer;
 
+use apis::Ep;
 use aux_drive::*;
 use goauth::*;
-use tracer::*;
-use lists::list_users;
 use limiters::create_rate_limiter;
-use apis::Ep;
+use lists::list_users;
+use tracer::*;
 
 // Commented out - may be needed for future Axum integration
 // use axum::{http::StatusCode, response::IntoResponse};
 
 use surrealstart::{
-  EM, Pets, StaticEm, StaticFil, StaticKey, StaticPid, StaticSdir, initdb,
-  gdatabase_to_sheetsdb,
+  EM, Pets, StaticEm, StaticFil, StaticKey, StaticPid, StaticSdir,
+  gdatabase_to_sheetsdb, initdb,
 };
 
 use std::{
@@ -178,14 +178,14 @@ async fn movevideosmul() -> AppResult<()> {
   info!("Step 3: Populating database with users from Google Workspace");
 
   let pets = Pets {
-    tsn: String::new(),           // Not needed for this operation
+    tsn: String::new(), // Not needed for this operation
     tsy: tsy.clone(),
-    sp: String::new(),            // Not needed
-    cmd: String::new(),           // Not needed
+    sp: String::new(),  // Not needed
+    cmd: String::new(), // Not needed
     abr: abr.to_string(),
     spshid: "1lOar2kxcKQVyQhQX5_fOPgUOe1dWtZO60O_ZHOKApgA".to_string(),
     dom: domain.to_string(),
-    params: String::new(),        // Not needed
+    params: String::new(), // Not needed
   };
 
   let limiter = create_rate_limiter(100); // 100 requests per second
