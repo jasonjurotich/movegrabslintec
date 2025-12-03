@@ -323,16 +323,19 @@ pub async fn impersonate_service_account(
 // MAIN TOKEN FUNCTIONS
 // ============================================================================
 
-/// Gets TSNS token (Token Subject No, Sheets)
-/// adminbotv3@adminbot-prod.iam.gserviceaccount.com accesses Google Sheets directly
-///
-/// # How it works:
-/// - **Production**: Gets token from VM metadata for adminbotv3 with sheets scopes
-/// - **Local**: Gets token from JSON key for adminbotv3 with sheets scopes
-/// - No subject, no impersonation - adminbotv3 uses its own identity
-///
-/// # Returns
-/// Bearer token for Google Sheets API
+// NOTE: get_tsns() not used in movegrabslintec (kept from avisosbot2 reference)
+// This project uses get_tok_impersonated() for all token operations
+// /// Gets TSNS token (Token Subject No, Sheets)
+// /// adminbotv3@adminbot-prod.iam.gserviceaccount.com accesses Google Sheets directly
+// ///
+// /// # How it works:
+// /// - **Production**: Gets token from VM metadata for adminbotv3 with sheets scopes
+// /// - **Local**: Gets token from JSON key for adminbotv3 with sheets scopes
+// /// - No subject, no impersonation - adminbotv3 uses its own identity
+// ///
+// /// # Returns
+// /// Bearer token for Google Sheets API
+#[allow(dead_code)]
 pub async fn get_tsns() -> AppResult<String> {
   debug!("Getting TSNS token for Google Sheets access");
 
@@ -447,6 +450,9 @@ pub async fn get_tok_impersonated(usr: &str, sub: &str) -> AppResult<String> {
     .cwl(&format!("Failed to impersonate {}", target_sa))
 }
 
+// NOTE: get_tsni() not used in movegrabslintec (kept from avisosbot2 reference)
+// This project uses get_tok_impersonated() directly
+#[allow(dead_code)]
 pub async fn get_tsni() -> AppResult<String> {
   debug!("Getting TSNI token for Google Chat");
   get_tok_impersonated("jason.jurotich@ieducando.com", "no")

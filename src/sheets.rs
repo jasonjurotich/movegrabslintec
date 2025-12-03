@@ -5,10 +5,10 @@ use crate::AppResult;
 // NOTE: get_token_for_secrets removed - use goauth2 tokens instead
 use crate::limiters::get_global_sheets_limiter;
 use crate::surrealstart::{
-  DB, EM, PETS, getnumqry, google_to_sheetsdb, req_build,
+  DB, PETS, getnumqry, google_to_sheetsdb, req_build,
 };
 use crate::tracer::ContextExt;
-use crate::{bail, debug, error, info, warn};
+use crate::{bail, debug, error, warn};
 use regex::Regex;
 use serde_json::{Map, Value, json};
 use std::time::Instant;
