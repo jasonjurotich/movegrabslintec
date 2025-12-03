@@ -4,8 +4,7 @@ mod aux_process;
 mod aux_sur;
 
 mod error_utils;
-mod goauth;
-mod jsonresfil;
+mod goauth2;
 mod limiters;
 mod lists;
 mod mod_process;
@@ -17,7 +16,7 @@ mod tracer;
 
 use apis::Ep;
 use aux_drive::*;
-use goauth::*;
+use goauth2::*;
 use limiters::create_rate_limiter;
 use lists::list_users;
 use tracer::*;
@@ -27,7 +26,7 @@ use tracer::*;
 
 use surrealstart::{
   EM, Pets, StaticEm, StaticFil, StaticKey, StaticPid, StaticSdir,
-  gdatabase_to_sheetsdb, initdb,
+  check_key, extract_record_parts, gdatabase_to_sheetsdb, initdb,
 };
 
 use std::{
@@ -144,7 +143,7 @@ async fn movevideosmul() -> AppResult<()> {
   // Get admin token with subject (tsy) for Drive/Workspace API calls
   // NOTE: tsy (token subject yes) is used for all Google Workspace operations
   // that require domain-wide delegation (Drive, Groups, etc.)
-  let tsy = get_tok(admin_email.to_string(), "yes")
+  let tsy = get_tok_impersonated(admin_email, "yes")
     .await
     .cwl("Failed to get tsy admin token")?;
 

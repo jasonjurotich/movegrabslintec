@@ -1118,16 +1118,16 @@ pub async fn pets_fields() -> AppResult<Pets> {
         );
       }
 
-      // Generate fresh token since petition doesn't have it yet
+      // NOTE: Token generation removed - get_token_for_secrets() should NOT be used
+      // for Workspace API calls (Drive, Groups, etc.). Tokens should be passed from
+      // main.rs using get_tok_impersonated() from goauth2 module.
       debug!(
-        "pets_fields: Generating fresh token since petition record doesn't contain token yet"
+        "pets_fields: No token in petition record, using empty token as fallback"
       );
-      let fresh_token = crate::goauth::get_token_for_secrets()
-        .await
-        .unwrap_or_else(|_| "".to_string());
+      let fresh_token = String::new();
       debug!(
         fresh_token_length = fresh_token.len(),
-        "pets_fields: Generated fresh token"
+        "pets_fields: Using empty token fallback"
       );
 
       // Return actual data structure with fresh token

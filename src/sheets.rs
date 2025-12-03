@@ -2,7 +2,7 @@
 
 use super::apis::*;
 use crate::AppResult;
-use crate::goauth::get_token_for_secrets;
+// NOTE: get_token_for_secrets removed - use goauth2 tokens instead
 use crate::limiters::get_global_sheets_limiter;
 use crate::surrealstart::{
   DB, EM, PETS, getnumqry, google_to_sheetsdb, req_build,
@@ -848,291 +848,291 @@ pub fn spreadsheet_format_to_values(data: Vec<Vec<String>>) -> Vec<Value> {
     .collect()
 }
 
-pub async fn frshtsadmin(cmd_override: Option<&str>) -> AppResult<()> {
-  let tsn = get_token_for_secrets()
-    .await
-    .cwl("Failed to get token for secrets")?;
+// pub async fn frshtsadmin(cmd_override: Option<&str>) -> AppResult<()> {
+//   let tsn = get_token_for_secrets()
+//     .await
+//     .cwl("Failed to get token for secrets")?;
 
-  let ep = Ep::Admins;
+//   let ep = Ep::Admins;
 
-  // NOTE this is the original sheet id for admins
-  // let shi = "1_oVdctSf2OkJbp8z8kmwxaxC-K5-XaHqDlIpW6jWXn4";
+//   // NOTE this is the original sheet id for admins
+//   // let shi = "1_oVdctSf2OkJbp8z8kmwxaxC-K5-XaHqDlIpW6jWXn4";
 
-  let shi = "1HnXYhMJZsM-_DYR0SPzU236D0aKVRxNfEUrxU295bW4";
-  let url = format!(
-    "{}{shi}/values/{}!A1:AI",
-    ep.base_url(),
-    ep.table_sheet().to_uppercase()
-  );
+//   let shi = "1HnXYhMJZsM-_DYR0SPzU236D0aKVRxNfEUrxU295bW4";
+//   let url = format!(
+//     "{}{shi}/values/{}!A1:AI",
+//     ep.base_url(),
+//     ep.table_sheet().to_uppercase()
+//   );
 
-  debug!(url = %url, "Fetching admin data from Google Sheets");
+//   debug!(url = %url, "Fetching admin data from Google Sheets");
 
-  let au_build = req_build("GET", &url, Some(&tsn), None, None)
-    .cwl("Failed to create auth builder for frshtsadmin")?;
+//   let au_build = req_build("GET", &url, Some(&tsn), None, None)
+//     .cwl("Failed to create auth builder for frshtsadmin")?;
 
-  // Apply rate limiting for Google Sheets API
-  get_global_sheets_limiter().until_ready().await;
+//   // Apply rate limiting for Google Sheets API
+//   get_global_sheets_limiter().until_ready().await;
 
-  let res = au_build
-    .send()
-    .await
-    .cwl("Failed to send request for frshtsadmin")?;
+//   let res = au_build
+//     .send()
+//     .await
+//     .cwl("Failed to send request for frshtsadmin")?;
 
-  match res.status().as_u16() {
-    200 => {
-      let rfin: Value = res
-        .json()
-        .await
-        .cwl("Failed to parse JSON response from Sheets API")?;
+//   match res.status().as_u16() {
+//     200 => {
+//       let rfin: Value = res
+//         .json()
+//         .await
+//         .cwl("Failed to parse JSON response from Sheets API")?;
 
-      let res = rfin[ep.res_obs()].as_array().cloned().unwrap_or_default();
+//       let res = rfin[ep.res_obs()].as_array().cloned().unwrap_or_default();
 
-      if res.is_empty() {
-        warn!("No rows found in sheet data, skipping processing");
-        return Ok(());
-      }
+//       if res.is_empty() {
+//         warn!("No rows found in sheet data, skipping processing");
+//         return Ok(());
+//       }
 
-      let rows: Vec<Vec<String>> = res
-        .into_iter()
-        .filter_map(|i| match serde_json::from_value(i) {
-          Ok(row) => Some(row),
-          Err(e) => {
-            warn!(error = %e, "Failed to deserialize row, skipping");
-            None
-          }
-        })
-        .collect();
+//       let rows: Vec<Vec<String>> = res
+//         .into_iter()
+//         .filter_map(|i| match serde_json::from_value(i) {
+//           Ok(row) => Some(row),
+//           Err(e) => {
+//             warn!(error = %e, "Failed to deserialize row, skipping");
+//             None
+//           }
+//         })
+//         .collect();
 
-      let rws: Vec<Vec<String>> =
-        rows.into_iter().filter(|row| !row.is_empty()).collect();
+//       let rws: Vec<Vec<String>> =
+//         rows.into_iter().filter(|row| !row.is_empty()).collect();
 
-      if rws.is_empty() {
-        warn!("No non-empty rows found after filtering, skipping processing");
-        return Ok(());
-      }
+//       if rws.is_empty() {
+//         warn!("No non-empty rows found after filtering, skipping processing");
+//         return Ok(());
+//       }
 
-      let transformed_values = spreadsheet_format_to_values(rws);
+//       let transformed_values = spreadsheet_format_to_values(rws);
 
-      // debug!(
-      //   record_count = transformed_values.len(),
-      //   "frshtsadmin: Processing admin records"
-      // );
+//       // debug!(
+//       //   record_count = transformed_values.len(),
+//       //   "frshtsadmin: Processing admin records"
+//       // );
 
-      // for (i, record) in transformed_values.iter().enumerate() {
-      //   let do_status = record
-      //     .get("do")
-      //     .and_then(|v| v.as_str())
-      //     .unwrap_or("unknown");
-      //   let domain = record
-      //     .get("dominio")
-      //     .and_then(|v| v.as_str())
-      //     .unwrap_or("unknown");
-      //   debug!(
-      //     "frshtsadmin: Record {} - domain: '{}', do status: '{}', full record: {:?}",
-      //     i + 1,
-      //     domain,
-      //     do_status,
-      //     record
-      //   );
-      // }
+//       // for (i, record) in transformed_values.iter().enumerate() {
+//       //   let do_status = record
+//       //     .get("do")
+//       //     .and_then(|v| v.as_str())
+//       //     .unwrap_or("unknown");
+//       //   let domain = record
+//       //     .get("dominio")
+//       //     .and_then(|v| v.as_str())
+//       //     .unwrap_or("unknown");
+//       //   debug!(
+//       //     "frshtsadmin: Record {} - domain: '{}', do status: '{}', full record: {:?}",
+//       //     i + 1,
+//       //     domain,
+//       //     do_status,
+//       //     record
+//       //   );
+//       // }
 
-      let mut valid_records = Vec::new();
-      let mut skipped_count = 0;
+//       let mut valid_records = Vec::new();
+//       let mut skipped_count = 0;
 
-      for mut admin_record in transformed_values {
-        let domain = match admin_record.as_object_mut() {
-          Some(obj) => match obj.get("dominio").and_then(|d| d.as_str()) {
-            Some(d) if !d.is_empty() => d.to_string(),
-            _ => {
-              warn!(record = ?obj, "Skipping record due to missing or empty domain");
-              skipped_count += 1;
-              continue;
-            }
-          },
-          _ => {
-            warn!(record = ?admin_record, "Skipping record due to invalid format");
-            skipped_count += 1;
-            continue;
-          }
-        };
+//       for mut admin_record in transformed_values {
+//         let domain = match admin_record.as_object_mut() {
+//           Some(obj) => match obj.get("dominio").and_then(|d| d.as_str()) {
+//             Some(d) if !d.is_empty() => d.to_string(),
+//             _ => {
+//               warn!(record = ?obj, "Skipping record due to missing or empty domain");
+//               skipped_count += 1;
+//               continue;
+//             }
+//           },
+//           _ => {
+//             warn!(record = ?admin_record, "Skipping record due to invalid format");
+//             skipped_count += 1;
+//             continue;
+//           }
+//         };
 
-        // debug!(domain = %domain, "Processing domain");
+//         // debug!(domain = %domain, "Processing domain");
 
-        if let Some(obj) = admin_record.as_object_mut() {
-          let current_admins = obj
-            .get("admins")
-            .and_then(|v| v.as_str())
-            .filter(|s| !s.trim().is_empty())
-            .unwrap_or("");
+//         if let Some(obj) = admin_record.as_object_mut() {
+//           let current_admins = obj
+//             .get("admins")
+//             .and_then(|v| v.as_str())
+//             .filter(|s| !s.trim().is_empty())
+//             .unwrap_or("");
 
-          let ieducando_admins = format!(
-            "juanjose.arroyo@ieducando.com, victor.segura@ieducando.com, \
-             guadalupe.yanez@ieducando.com, jason.jurotich@ieducando.com, {}, ieducando@{domain}",
-            &*EM
-          );
+//           let ieducando_admins = format!(
+//             "juanjose.arroyo@ieducando.com, victor.segura@ieducando.com, \
+//              guadalupe.yanez@ieducando.com, jason.jurotich@ieducando.com, {}, ieducando@{domain}",
+//             &*EM
+//           );
 
-          let extended_admins = if current_admins.is_empty() {
-            ieducando_admins
-          } else if current_admins.contains("juanjose.arroyo@ieducando.com") {
-            current_admins.to_string()
-          } else {
-            format!("{current_admins}, {ieducando_admins}")
-          };
+//           let extended_admins = if current_admins.is_empty() {
+//             ieducando_admins
+//           } else if current_admins.contains("juanjose.arroyo@ieducando.com") {
+//             current_admins.to_string()
+//           } else {
+//             format!("{current_admins}, {ieducando_admins}")
+//           };
 
-          obj.insert("admins".to_string(), Value::String(extended_admins));
-          // debug!(domain = %domain, "Updated admins list for domain");
-        }
+//           obj.insert("admins".to_string(), Value::String(extended_admins));
+//           // debug!(domain = %domain, "Updated admins list for domain");
+//         }
 
-        // let do_status = admin_record
-        //   .get("do")
-        //   .and_then(|v| v.as_str())
-        //   .unwrap_or("unknown");
-        // debug!(
-        //   "frshtsadmin: Record do status: '{}' for domain '{}'",
-        //   do_status, domain
-        // );
+//         // let do_status = admin_record
+//         //   .get("do")
+//         //   .and_then(|v| v.as_str())
+//         //   .unwrap_or("unknown");
+//         // debug!(
+//         //   "frshtsadmin: Record do status: '{}' for domain '{}'",
+//         //   do_status, domain
+//         // );
 
-        valid_records.push(admin_record);
-      }
+//         valid_records.push(admin_record);
+//       }
 
-      debug!(
-        "frshtsadmin: Processing {} valid records, skipped {}",
-        valid_records.len(),
-        skipped_count
-      );
+//       debug!(
+//         "frshtsadmin: Processing {} valid records, skipped {}",
+//         valid_records.len(),
+//         skipped_count
+//       );
 
-      if !valid_records.is_empty() {
-        let batch_size: usize = std::env::var("SURREAL_BATCH_SIZE")
-          .unwrap_or_else(|_| "2500".to_string())
-          .parse()
-          .unwrap_or(2500);
-        let total_chunks = valid_records.len().div_ceil(batch_size);
+//       if !valid_records.is_empty() {
+//         let batch_size: usize = std::env::var("SURREAL_BATCH_SIZE")
+//           .unwrap_or_else(|_| "2500".to_string())
+//           .parse()
+//           .unwrap_or(2500);
+//         let total_chunks = valid_records.len().div_ceil(batch_size);
 
-        debug!(
-          "frshtsadmin: Processing {} records in {} chunks of {} each",
-          valid_records.len(),
-          total_chunks,
-          batch_size
-        );
+//         debug!(
+//           "frshtsadmin: Processing {} records in {} chunks of {} each",
+//           valid_records.len(),
+//           total_chunks,
+//           batch_size
+//         );
 
-        if cmd_override == Some("cadsh") {
-          debug!("frshtsadmin: Using optimized DELETE + CREATE for cadsh");
+//         if cmd_override == Some("cadsh") {
+//           debug!("frshtsadmin: Using optimized DELETE + CREATE for cadsh");
 
-          DB.query("delete type::table($table);")
-            .bind(("table", ep.table_sheet()))
-            .await
-            .cwl("Failed to delete existing admin records")?;
+//           DB.query("delete type::table($table);")
+//             .bind(("table", ep.table_sheet()))
+//             .await
+//             .cwl("Failed to delete existing admin records")?;
 
-          for (chunk_idx, chunk) in valid_records.chunks(batch_size).enumerate()
-          {
-            debug!(
-              "frshtsadmin: Processing chunk {}/{} ({} records)",
-              chunk_idx + 1,
-              total_chunks,
-              chunk.len()
-            );
+//           for (chunk_idx, chunk) in valid_records.chunks(batch_size).enumerate()
+//           {
+//             debug!(
+//               "frshtsadmin: Processing chunk {}/{} ({} records)",
+//               chunk_idx + 1,
+//               total_chunks,
+//               chunk.len()
+//             );
 
-            let chunk_vec: Vec<_> = chunk.to_vec();
+//             let chunk_vec: Vec<_> = chunk.to_vec();
 
-            DB.query(
-              "
-              for $record in $records {
-                create type::thing($table, rand::uuid::v7())
-                set data = $record, ers = '';
-              }
-              ",
-            )
-            .bind(("table", ep.table_sheet()))
-            .bind(("records", chunk_vec))
-            .await
-            .cwl(&format!(
-              "Failed to batch insert records in chunk {}",
-              chunk_idx + 1
-            ))?;
-          }
-        } else {
-          for (chunk_idx, chunk) in valid_records.chunks(batch_size).enumerate()
-          {
-            debug!(
-              "frshtsadmin: Processing chunk {}/{} ({} records)",
-              chunk_idx + 1,
-              total_chunks,
-              chunk.len()
-            );
+//             DB.query(
+//               "
+//               for $record in $records {
+//                 create type::thing($table, rand::uuid::v7())
+//                 set data = $record, ers = '';
+//               }
+//               ",
+//             )
+//             .bind(("table", ep.table_sheet()))
+//             .bind(("records", chunk_vec))
+//             .await
+//             .cwl(&format!(
+//               "Failed to batch insert records in chunk {}",
+//               chunk_idx + 1
+//             ))?;
+//           }
+//         } else {
+//           for (chunk_idx, chunk) in valid_records.chunks(batch_size).enumerate()
+//           {
+//             debug!(
+//               "frshtsadmin: Processing chunk {}/{} ({} records)",
+//               chunk_idx + 1,
+//               total_chunks,
+//               chunk.len()
+//             );
 
-            let chunk_vec: Vec<_> = chunk.to_vec();
+//             let chunk_vec: Vec<_> = chunk.to_vec();
 
-            DB.query(
-              "
-              for $record in $records {
-                if $record.do = 'd' {
-                  let $existing = (
-                    select id from type::table($table)
-                    where data.dominio = $record.dominio
-                    limit 1
-                  );
-                  if $existing {
-                    update $existing[0].id
-                    set data = $record, ers = '';
-                  } else {
-                    create type::thing($table, rand::uuid::v7())
-                    set data = $record, ers = '';
-                  };
-                };
-              }
-              ",
-            )
-            .bind(("table", ep.table_sheet()))
-            .bind(("records", chunk_vec))
-            .await
-            .cwl(&format!(
-              "Failed to batch upsert records in chunk {}",
-              chunk_idx + 1
-            ))?;
-          }
-        }
-      }
+//             DB.query(
+//               "
+//               for $record in $records {
+//                 if $record.do = 'd' {
+//                   let $existing = (
+//                     select id from type::table($table)
+//                     where data.dominio = $record.dominio
+//                     limit 1
+//                   );
+//                   if $existing {
+//                     update $existing[0].id
+//                     set data = $record, ers = '';
+//                   } else {
+//                     create type::thing($table, rand::uuid::v7())
+//                     set data = $record, ers = '';
+//                   };
+//                 };
+//               }
+//               ",
+//             )
+//             .bind(("table", ep.table_sheet()))
+//             .bind(("records", chunk_vec))
+//             .await
+//             .cwl(&format!(
+//               "Failed to batch upsert records in chunk {}",
+//               chunk_idx + 1
+//             ))?;
+//           }
+//         }
+//       }
 
-      // Check final database state after all upserts - use count query
-      let count_query = "select count() from type::table($table) group all";
-      let mut count_response = DB
-        .query(count_query)
-        .bind(("table", ep.table_sheet()))
-        .await
-        .cwl("Failed to query final record count")?;
+//       // Check final database state after all upserts - use count query
+//       let count_query = "select count() from type::table($table) group all";
+//       let mut count_response = DB
+//         .query(count_query)
+//         .bind(("table", ep.table_sheet()))
+//         .await
+//         .cwl("Failed to query final record count")?;
 
-      let count_result: Vec<Value> = count_response
-        .take(0)
-        .cwl("Failed to take count query result")?;
+//       let count_result: Vec<Value> = count_response
+//         .take(0)
+//         .cwl("Failed to take count query result")?;
 
-      if let Some(count_obj) = count_result.first()
-        && let Some(count_val) = count_obj.get("count")
-      {
-        debug!(
-          "frshtsadmin: Final database state after all upserts - {} records total",
-          count_val
-        );
-      }
+//       if let Some(count_obj) = count_result.first()
+//         && let Some(count_val) = count_obj.get("count")
+//       {
+//         debug!(
+//           "frshtsadmin: Final database state after all upserts - {} records total",
+//           count_val
+//         );
+//       }
 
-      info!("ALL ADMIN RECORDS WERE PROCESSED CORRECTLY");
-      Ok(())
-    }
-    status => {
-      let error_text = res
-        .text()
-        .await
-        .cwl("Failed to read error response from API")?;
+//       info!("ALL ADMIN RECORDS WERE PROCESSED CORRECTLY");
+//       Ok(())
+//     }
+//     status => {
+//       let error_text = res
+//         .text()
+//         .await
+//         .cwl("Failed to read error response from API")?;
 
-      error!(
-        status = status,
-        error = %error_text,
-        "Google Sheets API returned error status"
-      );
+//       error!(
+//         status = status,
+//         error = %error_text,
+//         "Google Sheets API returned error status"
+//       );
 
-      Err(anyhow::anyhow!("API error: {} - {}", status, error_text))
-    }
-  }
-}
+//       Err(anyhow::anyhow!("API error: {} - {}", status, error_text))
+//     }
+//   }
+// }
 
 pub async fn count_db<T: Into<Ep>>(abr: String, ep: T) -> AppResult<u64> {
   let ep = ep.into();

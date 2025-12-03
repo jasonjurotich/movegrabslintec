@@ -5,7 +5,7 @@ use crate::aux_sur::check_is_admin;
 use crate::check_key;
 use crate::error_utils::{get_status_code_name, parse_google_api_error};
 use crate::extract_record_parts;
-use crate::goauth::get_tok;
+use crate::goauth2::get_tok_impersonated;
 use crate::limiters::{
   get_global_delete_limiter, get_global_drive_limiter,
   get_global_email_delete_limiter, get_global_licensing_limiter,
@@ -74,11 +74,8 @@ async fn retry_with_fresh_token(
   let admin_email = get_admin_email_for_abr(&p.abr).await?;
   debug!("🔄 [RETRY] Found admin email: {}", admin_email);
 
-  // Clear expired token and get fresh one
-  use crate::goauth::clear_token_cache;
-  clear_token_cache();
-
-  let fresh_token = crate::goauth::get_tok(admin_email, "yes")
+  // Get fresh token
+  let fresh_token = crate::goauth2::get_tok_impersonated(&admin_email, "yes")
     .await
     .cwl("Failed to refresh OAuth token")?;
   debug!("🔄 [RETRY] Successfully obtained fresh token");
@@ -828,7 +825,7 @@ pub async fn process_command(
 
         skip_if_admin!(p.abr, usr);
 
-        get_tok(usr.to_owned(), "yes")
+        get_tok_impersonated(usr, "yes")
           .await
           .cwl("Failed to generate token for user for files")?
       } else {
@@ -886,7 +883,7 @@ pub async fn process_command(
       skip_if_admin!(p.abr, usr);
 
       debug!("COD DEBUG: Getting token for user: {}", usr);
-      let tsyusr = get_tok(usr.to_owned(), "yes")
+      let tsyusr = get_tok_impersonated(usr, "yes")
         .await
         .cwl("Failed to generate token for user for files")?;
 
@@ -972,7 +969,7 @@ pub async fn process_command(
 
       skip_if_admin!(p.abr, usr);
 
-      let tsyusr = get_tok(usr.to_owned(), "yes")
+      let tsyusr = get_tok_impersonated(usr, "yes")
         .await
         .cwl("Failed to generate token for user for files")?;
 

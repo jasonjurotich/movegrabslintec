@@ -4,7 +4,6 @@ pub use super::apis::*;
 pub use super::lists::*;
 pub use super::mod_process::*;
 use crate::AppResult;
-use crate::jsonresfil::get_template_id_index;
 use crate::limiters::*;
 use crate::surrealstart::{
   DB,
@@ -172,13 +171,15 @@ pub async fn get_updatable_rows<T: Into<Ep>>(
     p.cmd, p.abr, all_rows
   );
 
-  let template_data = if p.cmd == "cadsh" {
-    get_template_id_index()
-      .await
-      .cwl("Could not get sheet id and index for template")?
-  } else {
-    None
-  };
+  // NOTE: Commented out - jsonresfil module removed (was for web servers)
+  // let template_data = if p.cmd == "cadsh" {
+  //   get_template_id_index()
+  //     .await
+  //     .cwl("Could not get sheet id and index for template")?
+  // } else {
+  //   None
+  // };
+  let template_data: Option<(String, String)> = None;
 
   debug!(
     "This is template_data in get_updatable_rows {:#?}",
@@ -343,10 +344,11 @@ pub async fn mods<T: Into<Ep>>(
           "Unauthorized: cadsh command can only be executed from the authorized space"
         );
       }
-      debug!("Running frshtsadmin for cadsh");
-      frshtsadmin(Some("cadsh"))
-        .await
-        .cwl("Failed to get rows from admin sheet")?;
+      debug!("Running frshtsadmin for cadsh - COMMENTED OUT");
+      // NOTE: frshtsadmin function commented out in sheets.rs (was for web servers)
+      // frshtsadmin(Some("cadsh"))
+      //   .await
+      //   .cwl("Failed to get rows from admin sheet")?;
     // } else if p.cmd == "petsum" {
     //   let txs = get_petition_summary_by_domain(p)
     //     .await
@@ -398,31 +400,10 @@ pub async fn mods<T: Into<Ep>>(
       // ============== parallel part starts here ========================
       if num != 0 {
         use crate::aux_sur::get_all_org_group_mappings;
-        use crate::goauth::{
-          check_token_needs_refresh, clear_token_cache, get_tok,
-        };
         use crate::surrealstart::ORG_GROUP_CACHE;
 
-        // Proactively refresh OAuth token if it will expire soon (within 10 minutes)
-        if check_token_needs_refresh(
-          &format!("{}@{}", p.abr, p.dom),
-          "yes",
-          600,
-        ) {
-          debug!(
-            "OAuth token expiring soon for {}, proactively refreshing",
-            p.abr
-          );
-          clear_token_cache();
-          match get_tok(format!("{}@{}", p.abr, p.dom), "yes").await {
-            Ok(_) => {
-              debug!("Successfully refreshed OAuth token for {}", p.abr);
-            }
-            Err(e) => {
-              warn!("Failed to proactively refresh OAuth token: {}", e);
-            }
-          }
-        }
+        // NOTE: Token refresh logic removed - goauth2 doesn't cache tokens
+        // Tokens are obtained fresh each time with 50-minute expiry
 
         if matches!(
           p.cmd.as_str(),

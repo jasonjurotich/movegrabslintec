@@ -4,7 +4,7 @@ pub use super::aux_sur::*;
 pub use super::sheets::*;
 use crate::AppResult;
 use crate::aux_process::get_perm_driveid;
-use crate::goauth::get_tok;
+use crate::goauth2::get_tok_impersonated;
 use crate::limiters::get_global_drive_limiter;
 use crate::surrealstart::Pets;
 use crate::tracer::ContextExt;
@@ -669,7 +669,7 @@ pub async fn list_files(
   debug!("Extracted usr from correo field: '{}'", usr);
   debug!("Error string er1: '{}'", er1);
 
-  let tsyusr = get_tok(usr.clone(), "yes")
+  let tsyusr = get_tok_impersonated(&usr, "yes")
     .await
     .cwl("Failed to generate token for user for files")?;
 
